@@ -18,19 +18,16 @@ from collections import Counter
 import pickle
 import warnings
 warnings.filterwarnings("ignore")
-import textstat
 import nltk
-nltk.download('stopwords')
-nltk.download('wordnet')
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
+import argparse
+
 
 # word2vec library
 import gensim.downloader
 import gensim.models
 from gensim.test.utils import common_texts
 # Word2Vec initialization
-w2v_model = gensim.downloader.load('glove-wiki-gigaword-300')
+# w2v_model = gensim.downloader.load('glove-wiki-gigaword-300')
 
 # unigram initialization
 MAXFEATURES = 5000
@@ -40,7 +37,6 @@ unigram_converter = CountVectorizer(max_features=MAXFEATURES)
 nq_path = './NaturalQuestions_train_reformatted_Feb24.json'
 qb_path = './qb_train_with_contexts_lower_nopunc_debug_Feb24.json'
 nq_like_path = './qb_train_with_contexts_lower_nopunc_debug_Feb24.json'
-
 
 # Step 6: Functions to extract features
 
@@ -146,11 +142,11 @@ def transform_data(df):
     feature_dictionary['label'] =  y_train
     feature_dictionary['length'] = get_length(df)
     feature_dictionary['duplicates'] = get_duplicates(df)
-    feature_dictionary['kincaid'] = get_kincaid(df)
+    #feature_dictionary['kincaid'] = get_kincaid(df)
     #feature_dictionary['num_nouns'] = get_num_nouns(df)
     #feature_dictionary['num_verbs'] = get_num_verbs(df)
     feature_dictionary['max_idf'] = get_max_idf(df)
-    feature_dictionary['unigram'] = get_unigram(df)
+    # feature_dictionary['unigram'] = get_unigram(df)
     #feature_dictionary['word2vec'] = get_word2vec(df_train)
     return feature_dictionary
 
@@ -253,6 +249,8 @@ def reshape_all(w2v_vectors):
     all_vectors = np.reshape(all_vectors, (a, b))
     return all_vectors
   
+
+
   
 # Step 9
 
@@ -261,45 +259,61 @@ def reshape_all(w2v_vectors):
 # qb_last = True: only consider the last sentence of the qb questions
 # qb_last = False: consider the whole qb questions
 if __name__=="__main__":
+
+  parser = argparse.ArgumentParser(description="Create classifier to discriminate synthetic questions from real questions")
+  parser.add_argument('--limit', type=int, default=-1)
+  parser.add_argument('--test_predictions', type=str, default='test_feature_dict_QB_NQ.csv')
+  parser.add_argument('--features', type=str, default='nqlike_feature_dict_QB_NQ.csv')
+  args = parser.parse_args()
 	# set flag and if_qb_last_sent here
 	# 0 --wellformedness accuracy output
 	# 1 --NQ-like output
-  flag = 0
   qb_last = True
   
   # transform dataset
   qb_train = pd.read_json(qb_path, lines=True, orient='records')
+  if args.limit >= 0:
+    qb_train = qb_train.head(args.limit)
+  qb_len = len(qb_train)
+  
   if qb_last:
     qb_last = []
-    for i in range(len(qb_train)):
+    for i in range(qb_len):
       qb_last.append(nltk.tokenize.sent_tokenize(qb_train.iloc[i]['question'])[-1].lower())
     del qb_train['question']
     qb_train['question'] = qb_last
   nq_train = pd.read_json(nq_path, lines=True, orient='records')
+  if args.limit >= 0:
+    nq_train = nq_train.head(args.limit)
+
   df = qb_train.append(nq_train, ignore_index=True)
   training_data, test_data = sklearn.model_selection.train_test_split(df, train_size = 0.75, random_state=42)
   df_train = training_data
   df_test = test_data
   
-  train_feature_dict = transform_data(df_train)  
+  train_feature_dict = transform_data(df_train)
+  train_feature_df = pd.DataFrame.from_dict(train_feature_dict, orient='index').transpose()
+  
 	# uncomment to save results
   save_dictionary(df_train['question'],train_feature_dict, './train_feature_dict_QB_NQ.csv')
 	# train classifier
   model = train_classifier(train_feature_dict)
- 
+
+  print(train_feature_df.head())
+  
 	# save feature weight
   weight_dict = generate_feature_weight(model, list(train_feature_dict.keys()))
   with open('logistic_regression_weight_dict_Qb_NQ.txt', 'w') as f:
     f.write(json.dumps(weight_dict))
   
-  if flag == 0:
+  if args.test_predictions:
 		# test
     print('QB NQ Test ')
     test_dict = evaluate(model, df_test)
     test_feature_dict = transform_data(df_test)
-    save_dictionary(df_test['question'],test_feature_dict, './test_feature_dict_QB_NQ.csv')
+    save_dictionary(df_test['question'],test_feature_dict, args.test_predictions)
     
-  if flag == 1:
+  if args.features:
 		# predict nq score for nq-like question
 		# transform data
     df_nqlike = pd.read_json(nq_like_path)
@@ -311,4 +325,4 @@ if __name__=="__main__":
 		# predicting and store results
     print('NQ-Like ')
     eval_nqlike = evaluate(model, df_nqlike, True)
-    save_dictionary(df_nqlike['question'],  eval_nqlike, './nqlike_feature_dict_QB_NQ.csv')
+    save_dictionary(df_nqlike['question'],  eval_nqlike, args.features)
