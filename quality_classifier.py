@@ -255,6 +255,7 @@ class Classifier:
     dict_to_write['label'] = dict_data['label']
     dict_to_write['pred'] = dict_data['pred']
     dict_to_write['source'] = list(questions['source'])
+    dict_to_write['good'] = [x > 0 and 'nq_like' in y for x, y in zip(dict_to_write['pred'], dict_to_write['source'])]
     
     df = pd.DataFrame(data=dict_to_write)
     df.to_csv(file_path)
