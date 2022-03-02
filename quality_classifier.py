@@ -14,6 +14,7 @@ import sklearn.preprocessing as preproc
 from sklearn.feature_extraction import text
 from sklearn import tree
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics import accuracy_score
 from sklearn.neighbors import NearestNeighbors
 from collections import Counter
 import pickle
@@ -49,7 +50,7 @@ def build_dataset(nq, qb, nq_like, limit, percent_test=0.25):
     if limit >= 0:
       fold = fold.head(limit)
 
-    fold['tokenized'] = fold['question'].apply(nltk.tokenize.sent_tokenize)
+    fold['tokenized'] = fold['question'].apply(lambda x: nltk.tokenize.sent_tokenize(x)[-1])
     fold['label'] = label
     fold['source'] = dataset_location
 
@@ -59,7 +60,8 @@ def build_dataset(nq, qb, nq_like, limit, percent_test=0.25):
       merged = fold
 
   train, test = sklearn.model_selection.train_test_split(merged, train_size=1.0-percent_test, random_state=42)
-  return train, text
+  print("Labels", train['label'])
+  return train, test
 
 # function to get number of nouns
 def count_num_nouns(text):
@@ -109,15 +111,16 @@ def calculate_idf( documents ):
   
     
 class Classifier:
-  def __init__(self, feature_list):
+  def __init__(self, feature_list, abnormal_length=5):
+    self._length_cutoff = abnormal_length
     self._features = feature_list
 
   def get_ablength(self, df_train):
-    return df_train['question'].str.split().apply(lambda x: len(x) < 3).values
+    return df_train['tokenized'].apply(lambda x: len(x.split()) < self._length_cutoff).values
     
   # function to compute length feature
   def get_length(self, df_train):
-    return df_train['question'].str.split().apply(lambda x: log(1 + len(x))).values
+    return df_train['tokenized'].apply(lambda x: log(1 + len(x.split()))).values
 
   #function to compute kincaid readability score
   def get_kincaid(self, df_train):
@@ -157,14 +160,15 @@ class Classifier:
   def get_unigram(self, df_train):
     umatrix = []
     if len(df_train) < MAXFEATURES:
-      umatrix = unigram_converter.transform(df_train['question'])
+      umatrix = unigram_converter.transform(df_train['tokenized'])
     else:
-      umatrix = unigram_converter.fit_transform(df_train['question'])
+      umatrix = unigram_converter.fit_transform(df_train['tokenized'])
     unigram_list = unigram_converter.inverse_transform(umatrix)
     return unigram_list
 
   def prepare_features(self, df):
-    feature_dictionary = {}    
+    feature_dictionary = {}
+    print("Test data", df)
     y_train = df['score'].values
     # function transform the training data to train
     feature_dictionary['label'] =  y_train    
@@ -179,50 +183,64 @@ class Classifier:
   def get_x_vals(self, dictionary):
     x_vals = np.zeros((len(dictionary['label']), 1))
     for key in dictionary.keys():
-      if key != 'label' and key != 'word2vec':
-        if key == 'unigram':
-          x = [' '.join(it) for it in dictionary['unigram']]
-          x = unigram_converter.transform(x)
-          x_vals = np.concatenate((x_vals, x.toarray()), axis=1)
-        else:
-          x = np.reshape(dictionary[key], (-1, 1))
-          x_vals = np.concatenate((x_vals, x), axis=1)
+      if key == 'label':
+        continue
+      elif key == 'unigram':
+        x = [' '.join(it) for it in dictionary['unigram']]
+        x = unigram_converter.transform(x)
+        x_vals = np.concatenate((x_vals, x.toarray()), axis=1)
+      else:
+        x = np.reshape(dictionary[key], (-1, 1))
+        x_vals = np.concatenate((x_vals, x), axis=1)
 
-    print(x_vals)
+    print("XVALS", x_vals)
     x_vals = np.delete(x_vals, 0, 1)
     print(x_vals)
     return x_vals
 
   # function to train classifier    
-  def train_classifier(self, train_dict):
+  def train_classifier(self, train):
+    train_dict = c.prepare_features(train)
+    y_train = train['label']
+    
     print("Training classifer with features: %s" % str(train_dict.keys()))
-    y_train = train_dict['label']
+    print("YVALS", y_train)
+
     x_train = self.get_x_vals(train_dict) 
 
     model = LogisticRegression().fit(x_train,y_train)
     return model
 
   # function to evaluate classifier
-  def evaluate(self, model, df_test, is_nq_like=False):
+  def evaluate(self, model, df_test):
     test_dict = self.prepare_features(df_test)
     
     x = self.get_x_vals(test_dict)
     results = model.predict_proba(x)
     test_dict['prob_scores'] = results[:, 1]
     predictions = model.predict(x)
-    test_dict['prediction'] = predictions
-    # accuracy
-    if not is_nq_like:
-      acc = model.score(x, df_test.score)
-      print('Accuracy: '+format(acc)+'\n')
+    test_dict['pred'] = predictions
+
+    # TODO: Compute precision and recall
+    #
+    # of the things that we say are NQ, how many actually are?
+    # of the NQ questions, how many did we find?
+
+    print("PRED", predictions)
+    print("LAB", df_test['label'])
+    
+    acc = accuracy_score(predictions, df_test['label'])
+    print('Accuracy: '+format(acc)+'\n')
     return test_dict
 
   def generate_feature_weight(self, model):
     feature_weight = {}
     weights = model.coef_[0]
-    assert len(weights) == (len(self._features) + 1), "Unexpected feature length"
-    for feature, weight in zip(["BIAS"] + self._features, weights):
-      feature_weight[names[i+1]] = weights[i]
+
+    assert len(weights) == (len(self._features)), "Unexpected feature length %i vs %i" % (len(self._features) + 1, len(weights))
+    for feature, weight in zip(self._features, weights):
+      feature_weight[feature] = weight
+    feature_weight["BIAS"] = model.intercept_[0]
 
     return feature_weight
 
@@ -230,9 +248,14 @@ class Classifier:
 
     len_of_data = len(questions)
     dict_to_write = {}
-    dict_to_write['questions'] = list(questions)
+    dict_to_write['questions'] = list(questions['tokenized'])
     for col in self._features:
       dict_to_write[col] = dict_data[col]
+
+    dict_to_write['label'] = dict_data['label']
+    dict_to_write['pred'] = dict_data['pred']
+    dict_to_write['source'] = list(questions['source'])
+    
     df = pd.DataFrame(data=dict_to_write)
     df.to_csv(file_path)
 
@@ -252,24 +275,21 @@ if __name__=="__main__":
   parser.add_argument('--test_predictions', type=str, default='test_feature_dict_QB_NQ.csv')
   parser.add_argument('--nq_data', type=str, default='NaturalQuestions_train_reformatted_Feb24.json')
   parser.add_argument('--qb_data', type=str, default='qb_train_with_contexts_lower_nopunc_debug_Feb24.json')
-  parser.add_argument('--nqlike_data', type=str, default='qb_train_with_contexts_lower_nopunc_debug_Feb24.json')  
+  parser.add_argument('--nqlike_data', type=str, default='nq_like_questions_train_with_orig_quality_scores_with_contexts_Mar1_data_cleaned.json')  
   parser.add_argument('--features', type=str, default='')
   args = parser.parse_args()
 	# set flag and if_qb_last_sent here
 	# 0 --wellformedness accuracy output
 	# 1 --NQ-like output
 
-  train, text = build_dataset(args.nq_data, args.qb_data, args.nqlike_data, args.limit)
+  train, test = build_dataset(args.nq_data, args.qb_data, args.nqlike_data, args.limit)
   c = Classifier(args.feature_list)
-  
-  train_dict = c.prepare_features(train)
 
-  # Save training data to inspect features
-  c.save_dictionary(train['question'], train_dict, './train_feature_dict_QB_NQ.csv')
 
   # Train model and output the weights
-  model = c.train_classifier(train_dict)
+  model = c.train_classifier(train)
   weight_dict = c.generate_feature_weight(model)
+  print("Weight dict", weight_dict)
   with open('logistic_regression_weight_dict_Qb_NQ.txt', 'w') as f:
     f.write(json.dumps(weight_dict))
   
@@ -277,8 +297,8 @@ if __name__=="__main__":
   if args.test_predictions:
 		# test
     print('QB NQ Test ')
-    test_dict = c.evaluate(model, df_test)
-    c.save_dictionary(df_test['question'], test_dict, args.test_predictions)
+    test_dict = c.evaluate(model, test)
+    c.save_dictionary(test, test_dict, args.test_predictions)
     
   if args.features:
 		# predict nq score for nq-like question
