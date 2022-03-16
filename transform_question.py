@@ -17,7 +17,6 @@ from nltk.tokenize import word_tokenize
 import tensorflow as tf
 from transformers import DistilBertTokenizerFast
 from transformers import TFDistilBertForSequenceClassification
-import faiss
 from functools import partial
 from sklearn.model_selection import train_test_split
 
@@ -1002,6 +1001,11 @@ if __name__ == "__main__":
   limit = args.limit
   qb_df = None
 
+  # retraining the answer type classifier
+  if args.answer_type_classifier:
+      print("retraining the answer type classifier from scratch......")
+      answer_type_classifier_training()
+  
   with open(flags.lat_freq) as json_file:
     answer_type_dict = json.load(json_file)
   
@@ -1035,7 +1039,3 @@ if __name__ == "__main__":
         for nqlike in nqlike_lists:
           f.write(nqlike + "\n")
           
-  # retraining the answer type classifier
-  if args.answer_type_classifier:
-      print("retraining the answer type classifier from scratch......")
-      answer_type_classifier_training()
