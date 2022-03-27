@@ -11,24 +11,24 @@ import re
 import random
 import argparse
 import spacy
-import neuralcoref
+# import neuralcoref
 from nltk.tag import StanfordNERTagger
 from nltk.tokenize import word_tokenize
-import tensorflow as tf
-from transformers import DistilBertTokenizerFast
-from transformers import TFDistilBertForSequenceClassification
+# import tensorflow as tf
+# from transformers import DistilBertTokenizerFast
+# from transformers import TFDistilBertForSequenceClassification
 from functools import partial
 from sklearn.model_selection import train_test_split
 
 import re
 from collections import Counter
-nltk.download('punkt')
-nltk.download('stopwords')
-nltk.download('wordnet')
-nltk.download('averaged_perceptron_tagger')
+# nltk.download('punkt')
+# nltk.download('stopwords')
+# nltk.download('wordnet')
+# nltk.download('averaged_perceptron_tagger')
 
 nlp = spacy.load('en_core_web_sm')
-neuralcoref.add_to_pipe(nlp)
+# neuralcoref.add_to_pipe(nlp)
 
 
 #Step6. Heuristics for NQlike quality checking
@@ -69,7 +69,7 @@ def drop_after_semicolon(q):
   to_clean = ";.*"
   if re.search(to_clean, q):
     q = re.sub(to_clean, '', q)
-  return q 
+  return q
 
 # Heuristic 4 remove pattern issues
 def remove_pattern(q):
@@ -78,7 +78,7 @@ def remove_pattern(q):
     q = re.sub(to_clean, '', q)
   return q
 
-# Heuristic 5 remove repetition of the subject “is this” 
+# Heuristic 5 remove repetition of the subject “is this”
 def count_num_of_verbs(text, strictly = False):
   verb_tags = []
   if strictly:
@@ -171,7 +171,7 @@ def remove_niw(q):
   if re.search(to_clean, q):
     q = re.sub(to_clean, 'which', q)
   return q
-  
+
 # function counts the number of of questions with 1,2,3 words
 def count_word_freq(q_lst):
   count_1 = 0
@@ -359,42 +359,21 @@ def quality_check(qb_id, q):
   deal_with_VERB_AUX_at_beginning(qb_id, q)
   deal_which_none_is(qb_id, q)
   deal_what_is_which(q)
-  return 
- 
+  return
+
 #Step7. heuristics for transforming QB to NQlike
 
-def clean_chunk(chunk):
-  # might have trailing 'and', 'but', etc
-  prefixes = ['and', 'but', 'when', 'while', ',']
-  punc = ',.'
-  chunk = chunk.strip()
-  chunk = chunk.strip(punc)
-  chunk = chunk.strip()
-  chunk = chunk.strip(punc)
-  chunk = chunk.strip()
-  
-  if chunk.endswith(' '):
-    chunk = chunk[:-1]
-  
-  for prefix in prefixes:
-    if chunk.startswith(prefix+' '):
-      chunk =  chunk[len(prefix)+1:]
-    if chunk.endswith(' '+prefix):
-      chunk = chunk[:-len(prefix)-1]
-  chunk = chunk.strip()
 
-  return chunk 
-
-def uniques( your_string ):    
+def uniques( your_string ):
     words = your_string.split()
 
     seen = set()
     seen_add = seen.add
 
     def add(x):
-        seen_add(x)  
+        seen_add(x)
         return x
-    
+
     output = ' '.join( add(i) for i in words if i not in seen )
     return output
 
@@ -416,8 +395,9 @@ def remove_duplicates(q):
   return q
 
 # BERT answer type classification
-tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
-loaded_model = TFDistilBertForSequenceClassification.from_pretrained("./TriviaQuestion2NQ_Transform_Dataset/BERT_Classification/Aug19_answer_type_classification_model/")
+# tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
+# loaded_model = TFDistilBertForSequenceClassification.from_pretrained("./TriviaQuestion2NQ_Transform_Dataset/BERT_Classification/Aug19_answer_type_classification_model/")
+
 def get_answer_type_group(test_sentence):
   predict_input = tokenizer.encode(test_sentence,
                                  truncation=True,
@@ -461,7 +441,7 @@ def last_sent_transform(q_with_the_chunks):
         if flag:
           break
     word  = (' ').join(tok)
-    
+
     replacement = 'which is the'
     for k,v in last_sent_word_transform_30000.items():
       if k == 'unk':
@@ -469,11 +449,11 @@ def last_sent_transform(q_with_the_chunks):
       if word in v:
         replacement = k
         break
-    
+
     transformed_q = q.split(' ')
     transformed_q = transformed_q[2:]
     transformed_q = (' ').join(transformed_q)
-    transformed_q = replacement + ' ' + transformed_q   
+    transformed_q = replacement + ' ' + transformed_q
   elif q.split(' ')[:2] == ['name', 'these'] or q.split(' ')[:2] == ['identify', 'these'] or q.split(' ')[:2] == ['give', 'these'] \
   or q.split(' ')[:2] == ['Name', 'these'] or q.split(' ')[:2] == ['Identify', 'these'] or q.split(' ')[:2] == ['Give', 'these'] \
   or q.split(' ')[:2] == ['Give', 'the'] or q.split(' ')[:2] == ['give', 'the']:
@@ -489,7 +469,7 @@ def last_sent_transform(q_with_the_chunks):
         if flag:
           break
     word  = (' ').join(tok)
-    
+
     replacement = 'which are the'
     for k,v in last_sent_word_transform_30000.items():
       if not k == 'unk':
@@ -500,7 +480,7 @@ def last_sent_transform(q_with_the_chunks):
     transformed_q = q.split(' ')
     transformed_q = transformed_q[2:]
     transformed_q = (' ').join(transformed_q)
-    transformed_q = replacement + ' ' + transformed_q   
+    transformed_q = replacement + ' ' + transformed_q
   else:
     transformed_q = q
   transformed_q = q_chunks+' '+transformed_q
@@ -517,8 +497,8 @@ non_last_sent_transform_dict = {'this ':' which ', 'This ':'Which ',
     'After ':''
  }
 
-with open('./TriviaQuestion2NQ_Transform_Dataset/word_transform_dict.json', 'r') as f:
-  last_sent_word_transform_30000 = json.load(f)
+# with open('./TriviaQuestion2NQ_Transform_Dataset/word_transform_dict.json', 'r') as f:
+#  last_sent_word_transform_30000 = json.load(f)
 
 remove_dict = {
     'For 10 points,  ':'', 'for 10 points,  ':'',
@@ -535,7 +515,7 @@ remove_dict = {
     'For ten points , ':'', 'for ten points , ':'',
     'FTP , ':'', 'ftp , ':'',
     'For 20 points , ':'', 'for 20 points , ':'',
-    'For 5 points , ':'', 
+    'For 5 points , ':'',
     'For 10 points ':'', 'for 10 points ':'',
     'For ten points ':'', 'for ten points ':'',
     'FTP ':'', 'ftp ':'',
@@ -588,14 +568,14 @@ def transformation_intermediate_sent(qb_id, q):
           FLAG = 1
           break
       if FLAG:
-        return steps_before_return(q)          
+        return steps_before_return(q)
       for k in ['He\'s ', 'His ', 'Whose ', 'She\'s ', 'Her ']:
-        q = re.sub(k, replacement+'\'s'+' ', q, 1)   
+        q = re.sub(k, replacement+'\'s'+' ', q, 1)
         if not q_orig == q:
           FLAG = 1
           break
       if FLAG:
-        return steps_before_return(q)     
+        return steps_before_return(q)
       for k in [' he\'s ', ' his ', ' whose ', ' she\'s ', ' her ']:
         q = re.sub(k, ' '+replacement+'\'s'+' ', q, 1)
         if not q_orig == q:
@@ -618,44 +598,44 @@ def transformation_intermediate_sent(qb_id, q):
             FLAG = 1
             break
         if FLAG:
-          return steps_before_return(q) 
+          return steps_before_return(q)
         for k in ['This ']:
-          q = re.sub(k, 'Which ', q, 1)      
+          q = re.sub(k, 'Which ', q, 1)
           if not q_orig == q:
             FLAG = 1
             break
         if FLAG:
-          return steps_before_return(q) 
+          return steps_before_return(q)
         for k in [' he ', ' who ', ' she ', ' him ']:
           q = re.sub(k, ' '+replacement+' ', q, 1)
           if not q_orig == q:
             FLAG = 1
             break
         if FLAG:
-          return steps_before_return(q) 
+          return steps_before_return(q)
         for k in [' this ']:
           q = re.sub(k, ' which ', q, 1)
           if not q_orig == q:
             FLAG = 1
             break
         if FLAG:
-          return steps_before_return(q) 
+          return steps_before_return(q)
         for k in ['He\'s ', 'His ', 'Whose ', 'She\'s ', 'Her ']:
           q = re.sub(k, replacement+'\'s'+' ', q, 1)
           if not q_orig == q:
             FLAG = 1
             break
         if FLAG:
-          return steps_before_return(q) 
+          return steps_before_return(q)
         for k in [' he\'s ', ' his ', ' whose ', ' she\'s ', ' her ']:
           q = re.sub(k, ' '+replacement+'\'s'+' ', q, 1)
           if not q_orig == q:
             FLAG = 1
             break
         if FLAG:
-          return steps_before_return(q) 
+          return steps_before_return(q)
       else:
-        # answer_type is a thing 
+        # answer_type is a thing
         replacement_prefix = 'which'
         replacement = replacement_prefix+' '+answer_type
         # swap in with the replacement
@@ -666,42 +646,42 @@ def transformation_intermediate_sent(qb_id, q):
             FLAG = 1
             break
         if FLAG:
-          return steps_before_return(q) 
+          return steps_before_return(q)
         for k in ['This ']:
           q = re.sub(k, 'Which ', q, 1)
           if not q_orig == q:
             FLAG = 1
             break
         if FLAG:
-          return steps_before_return(q) 
+          return steps_before_return(q)
         for k in [' what ', ' it ']:
           q = re.sub(k, ' '+replacement+' ', q, 1)
           if not q_orig == q:
             FLAG = 1
             break
         if FLAG:
-          return steps_before_return(q) 
+          return steps_before_return(q)
         for k in [' this ']:
-          q = re.sub(k, ' which ', q, 1)         
+          q = re.sub(k, ' which ', q, 1)
           if not q_orig == q:
             FLAG = 1
             break
         if FLAG:
-          return steps_before_return(q) 
+          return steps_before_return(q)
         for k in ['What\'s ', 'Its ', 'It\'s ']:
           q = re.sub(k, replacement+'\'s'+' ', q, 1)
           if not q_orig == q:
             FLAG = 1
             break
         if FLAG:
-          return steps_before_return(q) 
+          return steps_before_return(q)
         for k in [' what\'s ', ' its ', ' it\'s ']:
           q = re.sub(k, ' '+replacement+'\'s'+' ', q, 1)
           if not q_orig == q:
             FLAG = 1
             break
         if FLAG:
-          return steps_before_return(q) 
+          return steps_before_return(q)
   else:
       for k,v in non_last_sent_transform_dict.items():
         q = re.sub(' '+k, ' '+v, q, 1)
@@ -728,7 +708,7 @@ def deal_with_no_pronouns_cases(qb_id, q):
     if token.tag_ in pronouns_tags:
       flag = False
       break
-  
+
   if flag == True:
     # no pronouns in the question
 
@@ -743,7 +723,7 @@ def deal_with_no_pronouns_cases(qb_id, q):
       if token.tag_ == 'NNPS':
         sigular_plural_flags = False # plural
         break
-    
+
     # check if the first toke is VERB
     if question_test[0].pos_ == 'VERB' and question_test[1].pos_ != 'PART' and question_test[2].pos_ != 'AUX':
       replacement = 'which '+answer_type+' '
@@ -752,7 +732,7 @@ def deal_with_no_pronouns_cases(qb_id, q):
       if sigular_plural_flags == False:
         # plural
         replacement = 'which '+answer_type+' are '
-        q = replacement+q  
+        q = replacement+q
       else:
         # singular
         replacement = 'which '+answer_type+' is '
@@ -762,52 +742,52 @@ def deal_with_no_pronouns_cases(qb_id, q):
   return
 
 
-  
+
 def answer_type_classifier_training():
     #No need to rerun the answer type classifier to replicate results as we are providing checkpoints for the same
     #the checkpoints are already provided in the corresponding folder
-    
-    #A PERSON: 
+
+    #A PERSON:
     #     replace 'he/she/who/him' and 'He/She/Who/Him' with 'which + answer_type + is/are'
     #     replace 'his/whose/she's/he's' and 'His/Whose/She's/He's' with 'which + answer_type's'
-    
-    #A THING: 
+
+    #A THING:
     #     replace 'it/this/these' and 'It/This/These' with 'which + answer_type + is/are'
     #     replace 'it's' and 'It's' with 'which + answer_type's'
-    
-    
+
+
     #manually annotated
     with open('./word_transform_dict.json', 'r') as f:
       last_sent_word_transform_30000 = json.load(f)
-    
+
     person_list = []
     label_list = []
     for v in last_sent_word_transform_30000['who is the']:
       person_list.append(v)
       label_list.append('PERSON')
-    
+
     non_person_list = []
     for v in last_sent_word_transform_30000['which is the']:
       non_person_list.append(v)
       label_list.append('NON-PERSON')
-    
+
     for v in last_sent_word_transform_30000['what is the']:
       non_person_list.append(v)
       label_list.append('NON-PERSON')
-    
+
     my_answer_type_list = person_list+non_person_list
     label_list = label_list[:len(my_answer_type_list)]
     # convert lists to dataframe
     zippedList =  list(zip(label_list, my_answer_type_list))
     classification_df = pd.DataFrame(zippedList, columns=['label','answer_type'])
-    
+
     LE = LabelEncoder()
     classification_df['label'] = LE.fit_transform(classification_df['label'])
     classification_df.head()
-    
+
     groups = classification_df['answer_type'].values.tolist()
     labels = classification_df['label'].tolist()
-    
+
     training_sentences, validation_sentences, training_labels, validation_labels = train_test_split(groups, labels, test_size=.2)
     tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
     tokenizer([training_sentences[0]], truncation=True,
@@ -822,12 +802,12 @@ def answer_type_classifier_training():
         dict(train_encodings),
         training_labels
     ))
-    
+
     val_dataset = tf.data.Dataset.from_tensor_slices((
         dict(val_encodings),
         validation_labels
     ))
-    
+
     model = TFDistilBertForSequenceClassification.from_pretrained('distilbert-base-uncased',num_labels=2)
     optimizer = tf.keras.optimizers.Adam(learning_rate=5e-5, epsilon=1e-08)
     model.compile(optimizer=optimizer, loss=model.compute_loss, metrics=['accuracy'])
@@ -835,53 +815,87 @@ def answer_type_classifier_training():
               epochs=3,
               batch_size=16,
               validation_data=val_dataset.shuffle(100).batch(16))
-    
+
     #save the checkpoint
     model.save_pretrained("./TriviaQuestion2NQ_Transform_Dataset/BERT_Classification/Aug19_answer_type_classification_model/")
-  
-  
+
+
 #Step5. Main
 
 class QuestionRewriter:
 
-  def __init__(self, lat_frequency):
+  def __init__(self, lat_frequency, min_length, to_trim, valid_verbs):
     self.lat_frequency = lat_frequency
 
-  def single_question_transform(self, qb_id, question):
-      # parse tree
-      qb_id = str(qb_id)
-      nq_like_questions = []
-    
-      sample = q.strip()
-      sample = sample.strip('.')
-      doc = nlp(sample)
-      seen = set() # keep track of covered words
+    # Minimum number of tokens in a chunk
+    self.min_length = min_length
+
+    # Words or punctuation we remove from the start/end of the sentence
+    import re
+    self.to_trim_start = re.compile("^(" + "|".join(
+      "%s " % x for x in to_trim) + ")*")
+    self.to_trim_end = re.compile("(" + "|".join(
+      " %s" % x for x in to_trim) + ")*$")
+
+    self.valid_verbs = valid_verbs
+
+  def trim_chunk(self, chunk):
+    """
+    Remove non-content conjunctions and punctuation from start or end of chunk
+    """
+
+    chunk = self.to_trim_start.sub("", chunk)
+    chunk = self.to_trim_end.sub("", chunk)
+
+    return chunk
+
+
       # Find coref clusters
-      clusters = doc._.coref_clusters
+      # clusters = doc._.coref_clusters
       # Breakdown sentences using Parse Trees
-      chunks = []
-      for sent in doc.sents:
-          conj_heads = [cc for cc in sent.root.children if cc.dep_ == 'conj']
-          advcl_heads = [cc for cc in sent.root.children if cc.dep_ == 'advcl']
-          #print('Conjuction Heads found :', conj_heads)
-          #print('Advcl Heads found :', advcl_heads)
-        
-          heads = conj_heads + advcl_heads
-          for head in heads:
-              words = [ww for ww in head.subtree]
-              for word in words:
-                  seen.add(word)
-    
-              chunk = (' '.join([ww.text for ww in words]))
-              chunks.append( (head.i, chunk) )
-    
-          unseen = [ww for ww in sent if ww not in seen]
-          chunk = ' '.join([ww.text for ww in unseen])
-          chunks.append( (sent.root.i, chunk) )
-      
-      # Sort the chunks based on word index to ensure first sentences formed come first
-      chunks = sorted(chunks, key=lambda x: x[0])
-      
+
+  def generate_candidate_chunks_from_qb_question(self, question):
+    doc = nlp(question)
+    seen = set() # keep track of covered words
+    chunks = []
+
+    for sent in doc.sents:
+
+      # For all of the individual verbs, generate subsequences as candidates
+      for verb in [x for x in sent if x.pos_ == "VERB"]:
+        chunks.append((verb.left_edge.i,
+                       " ".join(x.text for x in verb.subtree)))
+
+      # If there's a conjunction, find its parent and give both the
+      # left and right form of it
+      for conj in [x for x in sent if x.pos_=="CCONJ"]:
+        if conj.has_head() and conj.head.has_head():
+          conj_parent = conj.head.head
+
+          left = " ".join(x.text for x in sent[conj_parent.left_edge.i:conj.i])
+
+          right = " ".join(x.text for x in sent[conj_parent.left_edge.i:
+                                                conj.head.left_edge.i]) + " ~ "
+          right += " ".join(x.text for x in
+                            sent[conj.i + 1:conj_parent.right_edge.i + 1])
+
+          chunks.append((conj_parent.left_edge.i, left))
+          chunks.append((conj_parent.left_edge.i, right))
+
+
+      # I saw some Advcl code here that clearly wouldn't work, please
+      # rewrite using the dependency parse code as an example.
+      # unseen = [ww for ww in sent if ww not in seen]
+      # chunk = ' '.join([ww.text for ww in unseen])
+      # chunks.append( (sent.root.i, chunk) )
+
+      # Sort the chunks based on word index to ensure first sentences
+      # formed come first
+    chunks = sorted(chunks, key=lambda x: x[0])
+    return chunks
+
+  def filter_chunks_by_size(self, candidates):
+
       # Ensure no sentences aren't too small
       if len(chunks)>1:
         for idx in range(1, len(chunks)):
@@ -891,8 +905,11 @@ class QuestionRewriter:
             #print('idx=',idx)
             #print('chunk len = ', len(chunks))
             raise NotImplementedError
-          if len(curr_chunk.split()) < 8 or (curr_chunk.split()[0] in ['after']):
-            #print('\nFound a small sent!\n')
+
+          # JBGCOMMENT: Shouldn't the length filter happen after
+          # trimming?
+          if len(curr_chunk.split()) < self.min_length or \
+             (curr_chunk.split()[0] in ['after']):
             last_i, last_chunk = chunks[idx-1]
             last_chunk = last_chunk + ' ' + curr_chunk
             chunks[idx-1] = (last_i, last_chunk)
@@ -900,52 +917,67 @@ class QuestionRewriter:
           if (idx+1)>=len(chunks):
             break
         curr_i, curr_chunk = chunks[0]
-        if len(curr_chunk.split()) < 8 and len(chunks)>1:
-          #print('\nFound a small pre-sent!\n')
+        if len(curr_chunk.split()) < self.min_length and len(chunks)>1:
+          # Found a small pre-sent!
           last_i, next_chunk = chunks[1]
           curr_chunk = curr_chunk + ' ' + next_chunk
           chunks[0] = (last_i, curr_chunk)
-          del chunks[1]    
-      
-      # Clean each sentence of trailing and, comma etc
-      for i in range(len(chunks)):
-        id,chunk = chunks[i]
-        chunk = clean_chunk(chunk)
-        chunks[i] = (id, chunk)
-        
-      
-      # Coreference subsitution
-      pronoun_list = ['he', 'she', 'his', 'her', 'its']
-      if len(chunks)>1:
-        for i in range(1, len(chunks)):
-          curr_i, curr_chunk = chunks[i]
-          chunk_doc = nlp(curr_chunk)
-          for id, w in enumerate(chunk_doc[:3]):
-            #print('Word in chunk doc ', w, '->',w.tag_)
-            if w.tag_ in ['NN', 'NNP', 'NNS', 'NNPS']:
-              continue
-            rep = w.text
-            for cluster in clusters:
-              #print('Noun chunks: ', cluster[0], '->', [x for x in cluster[0].noun_chunks])
-              if (len([x for x in cluster[0].noun_chunks]) > 0) and (str(cluster[0]).lower() not in pronoun_list):
-                match_cluster = [str(cc) for cc in cluster]
-                #print(match_cluster)
-                if w.text in match_cluster:
-                  rep = match_cluster[0]
-                  if w.text.lower() in ['his', 'her', 'its', 'it\'s']:
-                    rep += '\'s'
-                  #print(f'Found {w} in cluster!!!')
-                  #print('Replaceing with ', match_cluster[0])
-                  break
+          del chunks[1]
+
+
+  def substitute_pronouns(self, curr_chunk, replacements):
+    chunk_doc = nlp(curr_chunk)
+    for id, w in enumerate(chunk_doc):
+      if w.tag_ in ['NN', 'NNP', 'NNS', 'NNPS']:
+        continue
+      rep = w.text
+      for cluster in clusters:
+        #print('Noun chunks: ', cluster[0], '->', [x for x in cluster[0].noun_chunks])
+        if (len([x for x in cluster[0].noun_chunks]) > 0) and (str(cluster[0]).lower() not in pronoun_list):
+          match_cluster = [str(cc) for cc in cluster]
+          #print(match_cluster)
+          if w.text in match_cluster:
+            rep = match_cluster[0]
+            if w.text.lower() in ['his', 'her', 'its', 'it\'s']:
+              rep += '\'s'
+              #print(f'Found {w} in cluster!!!')
+              #print('Replaceing with ', match_cluster[0])
+              break
             if not w.text == rep:
-              replacement_list = [str(c) for c in chunk_doc] 
+              replacement_list = [str(c) for c in chunk_doc]
               replacement_list[id] = rep
               curr_chunk = (' ').join(replacement_list)
               chunks[i] = (curr_i, curr_chunk)
             else:
               curr_chunk = '' + curr_chunk
-    
-    
+
+
+  def single_question_transform(self, qb_id, question):
+      # parse tree
+      qb_id = str(qb_id)
+      nq_like_questions = []
+
+      chunks = generate_candidate_chunks_from_qb_question(question)
+      for variant, chunk in enumerate(chunks):
+        trimmed_chunk = self.trim_chunk(chunk)
+        substitute_lat = self.substitute_pronouns(trimmed_chunk)
+
+      chunks = apply(self.trim_chunk, chunks)
+      sample = q.strip()
+      sample = sample.strip('.')
+
+
+
+      # Clean each sentence of trailing and, comma etc
+      for i in range(len(chunks)):
+        id,chunk = chunks[i]
+        chunk = clean_chunk(chunk)
+        chunks[i] = (id, chunk)
+
+
+      # Coreference subsitution
+
+
       #print('\033[1m'+'Different nq like statements: (after 2nd breakdown):')
       for ii, chunk in chunks:
         # with the same qid
@@ -962,18 +994,18 @@ class QuestionRewriter:
           nq_like_questions[i] = transformation_intermediate_sent(qb_id, nq_like_questions[i])
           quality_check(qb_id, nq_like_questions[i])
       # return a NQlike list from one qb question
-      return nq_like_questions   
-    
+      return nq_like_questions
+
   def transform_questions(self, input_file, limit):
     if limit > 0:
       qb_df = pd.read_json(qb_path, lines=True, orient='records',nrows=limit)
     else:
       qb_df = pd.read_json(qb_path, lines=True, orient='records')
 
-  
+
     qb_questions_input = qb_df['question'].values
     qb_id_input = qb_df['qanta_id'].values
-  
+
     # transformation
     transformed = defaultdict(list)
     for qq, ii in zip(qb_questions, qb_id_input):
@@ -985,16 +1017,29 @@ class QuestionRewriter:
 
     return transformed
 
-    
+
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="Apply heuristic functions")
-  parser.add_argument('--limit', type=int, default=20,help="Limit of number of QB questions input")
-  parser.add_argument('--qb_path', type=str, default='./TriviaQuestion2NQ_Transform_Dataset/qb_train_with_contexts_lower_nopunc_debug_Feb24.json',
+  parser.add_argument('--limit', type=int,
+                      default=20,help="Limit of number of QB questions input")
+  parser.add_argument('--qb_path', type=str,
+                      default='./TriviaQuestion2NQ_Transform_Dataset/qb_train_with_contexts_lower_nopunc_debug_Feb24.json',
                       help="path of the qb dataset")
-  parser.add_argument('--save_result', type=bool, default=True, help="Save NQlike questions with corresponding contexts")
-  parser.add_argument('--lat_freq', type=str, default='lat_frequency.json', help="JSON of frequency for each LAT")
-  parser.add_argument('--save_only_NQlike_questions', type=bool, default=False, help="Only Save the NQlike outputs")
-  parser.add_argument('--answer_type_classifier', type=bool, default=False, help="Retrain the answer type classifier from scratch")
+  parser.add_argument('--save_result', type=bool, default=True,
+                      help="Save NQlike questions with corresponding contexts")
+  parser.add_argument('--lat_freq', type=str, default='lat_frequency.json',
+                      help="JSON of frequency for each LAT")
+  parser.add_argument('--save_only_NQlike_questions', type=bool, default=False,
+                      help="Only Save the NQlike outputs")
+  parser.add_argument('--answer_type_classifier', type=bool, default=False,
+                      help="Retrain the answer type classifier from scratch")
+  parser.add_argument('--raw_text_output', type=str, default='raw_nqlike.txt',
+                      help="One question per line of transformed questions")
+  parser.add_argument('--min_chunk_length', type=int, default=5,
+                      help="How long must extracted segment of QB question be?")
+  parser.add_argument('--config_file', type=str, default='config.json',
+                      help="File with data that configures extraction")
+
   args = parser.parse_args()
   # Load dataset
   qb_path = args.qb_path
@@ -1005,13 +1050,17 @@ if __name__ == "__main__":
   if args.answer_type_classifier:
       print("retraining the answer type classifier from scratch......")
       answer_type_classifier_training()
-  
+
   with open(flags.lat_freq) as json_file:
     answer_type_dict = json.load(json_file)
-  
-  rewriter = QuestionRewriter(answer_type_dict)
 
-  
+  with open(flags.config_file) as json_file:
+    config = json.load(json_file)
+
+  rewriter = QuestionRewriter(answer_type_dict, min_chunk_length,
+                              to_trim=config["to_trim"],
+                              valid_verbs=config["valid_verbs"])
+
   # save to json as a dataframe
   if args.save_result:
     nq_like_df = {
@@ -1021,6 +1070,7 @@ if __name__ == "__main__":
       'char_spans':[],
       'context':[]
     }
+
     for i in range(len(nq_like_questions_transformation_results)):
       assert len(nq_like_questions_transformation_results)==len(qb_df)
       nqlist = nq_like_questions_transformation_results[i]
@@ -1032,10 +1082,10 @@ if __name__ == "__main__":
         nq_like_df['context'].append(qb_df.iloc[i]['context'])
     new_nqlike = pd.DataFrame(nq_like_df)
     new_nqlike.to_json('./TriviaQuestion2NQ_Transform_Dataset/nq_like_questions_train_with_contexts.json', lines=True, orient='records')
+
   # only save the NQLike questions
   if args.save_only_NQlike_questions:
-    with open('./TriviaQuestion2NQ_Transform_Dataset/nqlike_questions_outputs.txt', 'w') as f:
+    with open(args.raw_text_output, 'w') as f:
       for nqlike_lists in nq_like_questions_transformation_results:
         for nqlike in nqlike_lists:
           f.write(nqlike + "\n")
-          

@@ -1,0 +1,6 @@
+{
+    "valid_verbs": ['AUX', 'VB','VBD','VBG','VBN','VBP','VBZ'],
+    "to_trim": ['and', 'but', 'when', 'while', ','],
+    "pos_pronouns": ['his', 'her', 'their', 'its'],
+    "pronouns": ['he', 'she', 'it', 'they'],
+}

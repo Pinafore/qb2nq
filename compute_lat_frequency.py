@@ -8,7 +8,7 @@ import os
 import re
 import random
 import spacy
-import neuralcoref
+# import neuralcoref
 from collections import Counter
 
 nltk.download('punkt')
@@ -16,7 +16,7 @@ nltk.download('stopwords')
 nltk.download('wordnet')
 
 nlp = spacy.load('en_core_web_sm')
-neuralcoref.add_to_pipe(nlp)
+# neuralcoref.add_to_pipe(nlp)
 
 remove_dict = {
     'For 10 points,  ':'', 'for 10 points,  ':'',
@@ -33,7 +33,7 @@ remove_dict = {
     'For ten points , ':'', 'for ten points , ':'',
     'FTP , ':'', 'ftp , ':'',
     'For 20 points , ':'', 'for 20 points , ':'',
-    'For 5 points , ':'', 
+    'For 5 points , ':'',
     'For 10 points ':'', 'for 10 points ':'',
     'For ten points ':'', 'for ten points ':'',
     'FTP ':'', 'ftp ':'',
@@ -41,16 +41,16 @@ remove_dict = {
     'For 5 points ':''
 }
 
-def uniques( your_string ):    
+def uniques( your_string ):
     words = your_string.split()
 
     seen = set()
     seen_add = seen.add
 
     def add(x):
-        seen_add(x)  
+        seen_add(x)
         return x
-    
+
     output = ' '.join( add(i) for i in words if i not in seen )
     return output
 
@@ -60,7 +60,7 @@ def junk_last_sentence(q):
     index = q.find(k)
     if index!=-1:
       q = q[index:]
-      break 
+      break
   for k,v in remove_dict.items():
     q = re.sub(k, v, q)
   return q
@@ -133,7 +133,7 @@ def get_answer_type(q):
   else:
       word = 'None'
   return word
-  
+
 def retrieve_answer_type_for_each_QB(orig_qb_path):
   if os.path.exists(orig_qb_path) == False:
     print('Please check if {} exists in the current folder'.format(orig_qb_path))
@@ -151,7 +151,7 @@ def retrieve_answer_type_for_each_QB(orig_qb_path):
   qanta_subcategory = []
   qanta_year = []
 
-  for i in range(len(qb_data)): 
+  for i in range(len(qb_data)):
     if i%5000 == 0:
       print("===> "+str(i)+"/112927\n")
     qanta_id.append(qb_data[i]['qanta_id'])
@@ -220,7 +220,7 @@ def retrieve_most_freq_answer_type_for_qid(qanta_train_with_answer_type_path):
   with open('./TriviaQuestion2NQ_Transform_Dataset/qanta_id_to_the_answer_type_most_freq_phrase_based_on_page_dict.json', 'w') as fp:
       json.dump(qid_to_answer_type_dict, fp)
   return
-  
+
 if __name__ == "__main__":
   orig_qb_path = 'qanta.train.2021.12.20.json'
   retrieve_answer_type_for_each_QB(orig_qb_path)
