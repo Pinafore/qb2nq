@@ -24,8 +24,13 @@ You can also run the quality_classifier.py to score the generated NQ-like questi
 ## Project Team Members:
 
 Saptarashmi Bandyopadhyay
+
 Hao Zou
+
 Chenqi Zhu
+
 Shraman Pal
+
 Abhranil Chandra
+
 Rohith Banda
