@@ -6,6 +6,7 @@ import re
 import json
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+import textstat
 from sklearn.feature_extraction.text import CountVectorizer,TfidfVectorizer
 from math import log
 from sklearn.linear_model import LogisticRegression,LogisticRegressionCV
@@ -108,12 +109,49 @@ def calculate_idf( documents ):
        term_IDF = math.log(float(N) / term_frequency)
        IDF[term] = term_IDF
    return IDF
+
+class Word2Vec:
+  def __init__(self, model=gensim.downloader.load('glove-wiki-gigaword-300')):
+    self.w2v_model = model
+  # Step 12
+  # function average word2vec vector
+  def avg_feature_vector(self,words, model, num_features, ind2key_set):
+      feature_vec = np.zeros((num_features, ), dtype='float32')
+      n_words = 0
+      for word in words:
+          if word in ind2key_set:
+              n_words += 1
+              feature_vec = np.add(feature_vec, model[word])
+      if (n_words > 0):
+          feature_vec = np.divide(feature_vec, n_words)
+      return feature_vec
+      
+  # define vectorizer
+  def word2vec_vectorizer(self,data, model,num_features,ind2key_set):
+      sentence = data.lower().split(' ')
+      return self.avg_feature_vector(sentence,model,num_features,ind2key_set)
+
+  # vectorize function
+  def vectorize(self,question):
+      return self.word2vec_vectorizer(question,self.w2v_model,300,set(self.w2v_model.index_to_key))
+
+  # reshape word2vec vectors
+  def reshape_all(self,w2v_vectors):
+      a = len(w2v_vectors)
+      b = 300
+      all_vectors = []
+      for v in w2v_vectors:
+          for e in v:
+              all_vectors.append(e)
+      all_vectors = np.reshape(all_vectors, (a, b))
+      return all_vectors
   
     
 class Classifier:
-  def __init__(self, feature_list, abnormal_length=5):
+  def __init__(self, feature_list, abnormal_length=5, w2v=Word2Vec()):
     self._length_cutoff = abnormal_length
     self._features = feature_list
+    self.w2v = w2v
 
   def get_ablength(self, df_train):
     return df_train['tokenized'].apply(lambda x: len(x.split()) < self._length_cutoff).values
@@ -155,7 +193,7 @@ class Classifier:
     return max_idf
 
   def get_word2vec(self, df_train):
-    return df_train['question'].apply(vectorize).values
+    return df_train['question'].apply(self.w2v.vectorize()).values
 
   def get_unigram(self, df_train):
     umatrix = []
@@ -304,7 +342,7 @@ if __name__=="__main__":
   if args.features:
 		# predict nq score for nq-like question
 		# transform data
-    df_nqlike = pd.read_json(nqlike_path, lines=True)
+    df_nqlike = pd.read_json(args.nqlike_data, lines=True)
     df_nqlike = df_nqlike[['qanta_id', 'question', 'quality_score']].copy()
     df_nqlike = df_nqlike.rename(columns={"quality_score": 'score'})
 		# sample 5% of all questions as dataset too large
@@ -312,5 +350,5 @@ if __name__=="__main__":
     nqlike_feature_dict = c.prepare_features(df_nqlike)
 		# predicting and store results
     print('NQ-Like ')
-    eval_nqlike = evaluate(model, df_nqlike, True)
-    save_dictionary(df_nqlike['question'],  eval_nqlike, args.features)
+    eval_nqlike = c.evaluate(model, df_nqlike, True)
+    c.save_dictionary(df_nqlike['question'],  eval_nqlike, args.features)
