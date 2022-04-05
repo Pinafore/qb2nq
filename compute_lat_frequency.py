@@ -162,7 +162,8 @@ def retrieve_answer_type_for_each_QB(orig_qb_path, lat_freq_computer):
       dataset1['qanta_year'] = qanta_year[i]
       dataset1_lst.append(dataset1)
   with open("./qanta_train_with_answer_type.json", 'w') as f:
-      f.write(json.dumps(dataset1_lst))
+      for item in dataset1_lst:
+          f.write(json.dumps(item) + "\n")
   return
 
 def retrieve_most_freq_answer_type_for_qid(qanta_train_with_answer_type_path):
