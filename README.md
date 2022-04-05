@@ -1,8 +1,4 @@
 # qb2nq
-![GitHub repo size](https://img.shields.io/github/repo-size/Pinafore/qb2nq?logo=Files&logoColor=white&style=for-the-badge)
-![Lines of code](https://img.shields.io/tokei/lines/github/Pinafore/qb2nq?color=royalblue&logo=Visual%20Studio%20Code&style=for-the-badge)
-![GitHub language count](https://img.shields.io/github/languages/count/Pinafore/qb2nq?color=lightgreen&style=for-the-badge)
-![GitHub contributors](https://img.shields.io/github/contributors/Pinafore/qb2nq?color=lightgreen&style=for-the-badge)
 
 qb2nq (*/ˈkæməl/*, **Q**uiz**B**owl **2** **N**atural **Q**uestions transformation) is a project to transform complicated trivia questions in the quizbowl dataset to simpler Natural Questions (NQ) dataset for better Question-Answering (QA) performance.
 
