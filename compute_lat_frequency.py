@@ -134,7 +134,7 @@ def retrieve_answer_type_for_each_QB(orig_qb_path, lat_freq_computer):
 
   for i in range(len(qb_data)):
     if i%5000 == 0:
-      print("===> "+str(i)+"/112927\n")
+      print("===> "+str(i)+"/"+str(len(qb_data))+"\n")
     qanta_id.append(qb_data[i]['qanta_id'])
     qanta_questions_last.append(nltk.tokenize.sent_tokenize(qb_data[i]['text'])[-1])
     qanta_questions_full.append(qb_data[i]['text'])
