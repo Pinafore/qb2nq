@@ -27,17 +27,8 @@ class TestQuestionTransformation(unittest.TestCase):
 
   def test_candidates(self):
       self.assertEqual(self.qr.single_question_transform(1, 
-          'The oldest document written in this language is a letter written in 1521 in the town of Câmpulung, while more recent poets writing in this language include Carmen Sylva and Anton Pann. This language uses five cases, though the genitive and dative cases are identical, as are the nominative and accusative. Tripthongs occur frequently in this language, as in "rusaoică," while interjections in this language include "mamă-mamă." It is more closely related to Dalmatian than to Italian or Spanish, and this language includes the pronouns "noi," "voi," and "eu" ["AY-oo"] and favors labial consonants such as "b" and "m" over velars such as "g" and "k." For 10 points, name this tongue spoken by the members of O-Zone and Nicolae Ceauşescu, an Eastern Romance language spoken in Bucharest.'),
-                       ["the oldest document written in which language is a letter written in 1521 in the town of C\u00e2mpulung",
-                       "while more recent poets writing in which language include Carmen Sylva and Anton Pann",
-                       "which language uses five cases",
-                       "which language is though the genitive and dative cases are identical , as are the nominative and accusative",
-                       "tripthongs occur frequently in which language , as in \" rusaoic\u0103",
-                       "while interjections in which language include \" mam\u0103 - mam\u0103",
-                       "which language is more closely related to Dalmatian than to Italian or Spanish",
-                       "which language includes the pronouns \" noi , \" voi , \" \" eu \" [ \" AY - oo \" ] and favors labial consonants such as \" b \" and \" m \" over velars such as \" g \" and \" k.",
-                       "which is the tongue spoken by the members of O - Zone and Nicolae Ceau\u015fescu , an Eastern Romance language spoken in Bucharest"])
-
+          'The oldest document written in this language is a letter written in 1521 in the town of Câmpulung, while more recent poets writing in this language include Carmen Sylva and Anton Pann. This language uses five cases, though the genitive and dative cases are identical, as are the nominative and accusative. Tripthongs occur frequently in this language, as in "rusaoică," while interjections in this language include "mamă-mamă." It is more closely related to Dalmatian than to Italian or Spanish, and this language includes the pronouns "noi," "voi," and "eu" ["AY-oo"] and favors labial consonants such as "b" and "m" over velars such as "g" and "k." For 10 points, name this tongue spoken by the members of O-Zone and Nicolae Ceauşescu, an Eastern Romance language spoken in Bucharest.')[:3],
+                       [{'nq_like_questions': 'the oldest document written in which language is a letter written in 1521 in the town of câmpulung', 'orig_output_before_transformation': 'The oldest document written in this language is a letter written in 1521 in the town of Câmpulung , .'}, {'nq_like_questions': 'while more recent poets writ in which language include carmen sylva and anton pann', 'orig_output_before_transformation': 'while more recent poets writing in this language include Carmen Sylva and Anton Pann'}, {'nq_like_questions': 'which language uses five cases', 'orig_output_before_transformation': 'This language uses five cases , .'}])
 
   def test_trim(self):
     self.assertEqual(self.qr.trim_chunk("and he fasted"),
@@ -50,7 +41,7 @@ class TestQuestionTransformation(unittest.TestCase):
                      "he fasted")
   
   def test_heuristic(self):
-    self.assertEqual(self.transformer.clean_marker("which german philosopher is this philosopher wrote a work , . "),
+    self.assertEqual(self.transformer.clean_marker(" )which german philosopher is this philosopher wrote a work , . "),
                      "which german philosopher is this philosopher wrote a work")
 
     self.assertEqual(self.transformer.clean_answer_type("-- name this person who presented a proposal"),
@@ -65,19 +56,19 @@ class TestQuestionTransformation(unittest.TestCase):
     self.assertEqual(self.transformer.remove_rep_subject("Why man is this man often see the same subject in different lights"),
                      "Why man often see the same subject in different lights")
 
-    self.assertEqual(self.transformer.remove_bd("I shall speak forth man is his sentiments"),
+    self.assertEqual(self.transformer.remove_BE_determiner("I shall speak forth man is his sentiments"),
                      "I shall speak forth man's sentiments")
 
-    self.assertEqual(self.transformer.fix_no_verb("which particle consisting of a charm quark and an anti - charm quark"),
-                     "which particle is consisting of a charm quark and an anti - charm quark")
+    self.assertEqual(self.transformer.fix_no_verb("which north god wielding north god"),
+                     "which north god is wielding north god")
 
-    self.assertEqual(self.transformer.remove_niw("identify which anguish of spirit it may cost"),
+    self.assertEqual(self.transformer.remove_name_which("identify which anguish of spirit it may cost"),
                      "which anguish of spirit it may cost")
     
     self.assertEqual(self.transformer.no_wh_words(-1, "this play begins with the protagonist"),
                      "which play begins with the protagonist")
                      
-    self.assertEqual(self.transformer.WDT_BE_pattern(96407, "this is known as uniform motion."),
+    self.assertEqual(self.transformer.this_is_pattern(96407, "this is known as uniform motion."),
                      "which law is known as uniform motion.")
 
     self.assertEqual(self.transformer.remove_end_be_verbs("which jewish holiday is that hymn is"),
@@ -97,6 +88,9 @@ class TestQuestionTransformation(unittest.TestCase):
 
     self.assertEqual(self.transformer.which_none_is(79908,"which none is its longest sections"),
                      "which holy text is its longest sections")  
+    
+    self.assertEqual(self.transformer.add_space_before_punctuation("welcome to, the jungle\'s"),
+                     "welcome to , the jungle \'s")  
 
 
 if __name__ == '__main__':
