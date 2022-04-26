@@ -34,7 +34,7 @@ from gensim.test.utils import common_texts
 
 # unigram initialization
 MAXFEATURES = 5000
-unigram_converter = CountVectorizer(max_features=MAXFEATURES)
+#unigram_converter = CountVectorizer(max_features=MAXFEATURES)
 
 
 
@@ -48,6 +48,8 @@ def build_dataset(nq, qb, nq_like, limit, percent_test=0.25):
   for label, dataset_location in [(1, nq), (0, qb), (0, nq_like)]:
     print("Reading %s" % dataset_location)
     fold = pd.read_json(dataset_location, lines=True, orient='records')
+    if dataset_location == nq_like:
+        fold = fold.rename(columns={"quality_score": 'score'})
     if limit >= 0:
       fold = fold.head(limit)
 
@@ -64,6 +66,11 @@ def build_dataset(nq, qb, nq_like, limit, percent_test=0.25):
   print("Labels", train['label'])
   return train, test
 
+def binarize(x):
+    if x < 1:
+        return 0
+    else:
+        return 1 
 # function to get number of nouns
 def count_num_nouns(text):
     tokens = nltk.word_tokenize(text.lower())
@@ -148,10 +155,13 @@ class Word2Vec:
   
     
 class Classifier:
-  def __init__(self, feature_list, abnormal_length=5, w2v=Word2Vec()):
+  def __init__(self, feature_list, abnormal_length=5, w2v=Word2Vec(), data_length = MAXFEATURES):
     self._length_cutoff = abnormal_length
     self._features = feature_list
     self.w2v = w2v
+    self.max_features = data_length
+    self.unigram_converter = CountVectorizer(max_features=data_length)
+    self.train_dict = None
 
   def get_ablength(self, df_train):
     return df_train['tokenized'].apply(lambda x: len(x.split()) < self._length_cutoff).values
@@ -193,15 +203,15 @@ class Classifier:
     return max_idf
 
   def get_word2vec(self, df_train):
-    return df_train['question'].apply(self.w2v.vectorize()).values
+    return df_train['question'].apply(self.w2v.vectorize).values
 
   def get_unigram(self, df_train):
     umatrix = []
-    if len(df_train) < MAXFEATURES:
-      umatrix = unigram_converter.transform(df_train['tokenized'])
+    if len(df_train) < self.max_features:
+      umatrix = self.unigram_converter.transform(df_train['tokenized'])
     else:
-      umatrix = unigram_converter.fit_transform(df_train['tokenized'])
-    unigram_list = unigram_converter.inverse_transform(umatrix)
+      umatrix = self.unigram_converter.fit_transform(df_train['tokenized'])
+    unigram_list = self.unigram_converter.inverse_transform(umatrix)
     return unigram_list
 
   def prepare_features(self, df):
@@ -221,31 +231,34 @@ class Classifier:
   def get_x_vals(self, dictionary):
     x_vals = np.zeros((len(dictionary['label']), 1))
     for key in dictionary.keys():
-      if key == 'label':
-        continue
-      elif key == 'unigram':
-        x = [' '.join(it) for it in dictionary['unigram']]
-        x = unigram_converter.transform(x)
-        x_vals = np.concatenate((x_vals, x.toarray()), axis=1)
-      else:
-        x = np.reshape(dictionary[key], (-1, 1))
-        x_vals = np.concatenate((x_vals, x), axis=1)
-
-    print("XVALS", x_vals)
+      if key != 'label' and key != 'qanta_id' and key != 'word2vec':
+        if key == 'unigram':
+          x = [' '.join(it) for it in dictionary['unigram']]
+          x = self.unigram_converter.transform(x)
+          x_vals = np.concatenate((x_vals, x.toarray()), axis=1)
+        else:
+          x = np.reshape(dictionary[key], (-1, 1))
+          x_vals = np.concatenate((x_vals, x), axis=1)
+  
+    if 'word2vec' in dictionary.keys():
+        new_x_vals = []
+        all_vectors = self.w2v.reshape_all(dictionary['word2vec'])
+        for i in range(0,len(all_vectors)):
+          new_x_vals.append(np.concatenate((x_vals[i],all_vectors[i])))
+        x_vals = new_x_vals
     x_vals = np.delete(x_vals, 0, 1)
-    print(x_vals)
+    print("XVALS", x_vals)
     return x_vals
 
   # function to train classifier    
   def train_classifier(self, train):
-    train_dict = c.prepare_features(train)
-    y_train = train['label']
+    self.train_dict = c.prepare_features(train)
+    y_train = train['label'].values
     
-    print("Training classifer with features: %s" % str(train_dict.keys()))
-    print("YVALS", y_train)
-
-    x_train = self.get_x_vals(train_dict) 
-
+    print("Training classifer with features: %s" % str(' '.join(self.train_dict.keys())))
+    print("YVALS")
+    print(y_train)
+    x_train = self.get_x_vals(self.train_dict) 
     model = LogisticRegression().fit(x_train,y_train)
     return model
 
@@ -258,7 +271,7 @@ class Classifier:
     test_dict['prob_scores'] = results[:, 1]
     predictions = model.predict(x)
     test_dict['pred'] = predictions
-
+    
     # TODO: Compute precision and recall
     #
     # of the things that we say are NQ, how many actually are?
@@ -274,10 +287,10 @@ class Classifier:
   def generate_feature_weight(self, model):
     feature_weight = {}
     weights = model.coef_[0]
-
-    assert len(weights) == (len(self._features)), "Unexpected feature length %i vs %i" % (len(self._features) + 1, len(weights))
-    for feature, weight in zip(self._features, weights):
-      feature_weight[feature] = weight
+    names = list(self.train_dict.keys())
+    #assert len(weights) == (len(self._features)), "Unexpected feature length %i vs %i" % (len(self._features) + 1, len(weights))
+    for i in range(0,len(names)-1):
+      feature_weight[names[i+1]] =[weights[i]] 
     feature_weight["BIAS"] = model.intercept_[0]
 
     return feature_weight
@@ -290,10 +303,11 @@ class Classifier:
     for col in self._features:
       dict_to_write[col] = dict_data[col]
 
-    dict_to_write['label'] = dict_data['label']
+    dict_to_write['label'] = [binarize(x) for x in dict_data['label']]
     dict_to_write['pred'] = dict_data['pred']
     dict_to_write['source'] = list(questions['source'])
     dict_to_write['good'] = [x > 0 and 'nq_like' in y for x, y in zip(dict_to_write['pred'], dict_to_write['source'])]
+    dict_to_write['prob_scores'] = dict_data['prob_scores'] 
     
     df = pd.DataFrame(data=dict_to_write)
     df.to_csv(file_path)
@@ -309,12 +323,12 @@ class Classifier:
 if __name__=="__main__":
 
   parser = argparse.ArgumentParser(description="Create classifier to discriminate synthetic questions from real questions")
-  parser.add_argument('--limit', type=int, default=-1)
+  parser.add_argument('--limit', type=int, default=20)
   parser.add_argument('-f', '--feature_list', nargs='+', default=['length', 'ablength'])
   parser.add_argument('--test_predictions', type=str, default='test_feature_dict_QB_NQ.csv')
-  parser.add_argument('--nq_data', type=str, default='NaturalQuestions_train_reformatted_Feb24.json')
-  parser.add_argument('--qb_data', type=str, default='qb_train_with_contexts_lower_nopunc_debug_Feb24.json')
-  parser.add_argument('--nqlike_data', type=str, default='nq_like_questions_train_with_orig_quality_scores_with_contexts_Mar1_data_cleaned.json')  
+  parser.add_argument('--nq_data', type=str, default='./TriviaQuestion2NQ_Transform_Dataset/NaturalQuestions_train_reformatted.json')
+  parser.add_argument('--qb_data', type=str, default='./TriviaQuestion2NQ_Transform_Dataset/qb_train_with_contexts_lower_nopunc_debug_Feb24.json')
+  parser.add_argument('--nqlike_data', type=str, default='./TriviaQuestion2NQ_Transform_Dataset/nq_like_questions_train_with_orig_quality_scores_with_contexts_Mar10_data_cleaned.json')  
   parser.add_argument('--features', type=str, default='')
   args = parser.parse_args()
 	# set flag and if_qb_last_sent here
@@ -322,7 +336,8 @@ if __name__=="__main__":
 	# 1 --NQ-like output
 
   train, test = build_dataset(args.nq_data, args.qb_data, args.nqlike_data, args.limit)
-  c = Classifier(args.feature_list)
+  unigram_len = min([len(train), MAXFEATURES])
+  c = Classifier(args.feature_list, data_length=unigram_len)
 
 
   # Train model and output the weights
