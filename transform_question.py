@@ -28,7 +28,7 @@ from collections import Counter
 #nltk.download('stopwords')
 #nltk.download('wordnet')
 #nltk.download('averaged_perceptron_tagger')
-nltk.download('omw-1.4')
+#nltk.download('omw-1.4')
 
 nlp = spacy.load('en_core_web_sm')
 neuralcoref.add_to_pipe(nlp)
@@ -55,9 +55,9 @@ class HeuristicsTransformer:
     """
     Remove punctuation patterns at the beginning and the end of the question
     """
-    to_clean = r"\"|\'|\(|\)|,|\."
+    to_clean = r"\"|\'|\(|\)|,|\.|\s"
     has_heuristic = False
-    q_array = q.split()
+    q_array = nltk.word_tokenize(q.lower())
     array_leng = len(q_array)
     while re.match(to_clean, q_array[array_leng-1]):
       q_array = q_array[:array_leng-1]
@@ -108,6 +108,9 @@ class HeuristicsTransformer:
 
   # Heuristic 5 remove repetition of the subject âis thisâ
   def count_num_of_verbs(self,text, strictly = False):
+    """
+    count the number of verbs
+    """
     verb_tags = []
     if strictly:
       verb_tags = self.strictly_valid_verbs
@@ -123,6 +126,9 @@ class HeuristicsTransformer:
     return num_of_verb
 
   def remove_rep_subject(self,q):
+    """
+    remove is this... pattern
+    """
     to_clean = " is this [a-zA-Z]*\s"
     if re.search(to_clean, q):
       # the sentence has to have 1 verb at least otherwise this will not be done
@@ -131,14 +137,29 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 6 change be determiner to s possession
-  def remove_bd(self,q):
+  def remove_BE_determiner(self,q):
+    """
+    change is his/is her/is its to 's
+    """
     to_clean = "( is his )|( is her )|( is its )"
     if re.search(to_clean, q):
       q = re.sub(to_clean, '\'s ', q)
     return q
 
+  # function to add space before punctuation
+  def add_space_before_punctuation(self,q):
+    """
+    add space before punctuation because in NQ there's space before all types of punctuation
+    """
+    tokens = nltk.word_tokenize(q.lower())
+    q = ' '.join(tokens)
+    return q
+
   # Heuristic 7 add be verb to questions without verb
   def add_verb(self,text):
+    """
+    add BE verb when there's no verb in the entire question
+    """
     tokens = nltk.word_tokenize(text.lower())
     text = nltk.Text(tokens)
     tagged = nltk.pos_tag(text)
@@ -159,15 +180,21 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 8 remove repetitive be verb when there's more verbs
-  def remove_rbv(self,q):
+  def remove_repeat_verb(self,q):
+    """
+    remove is he/is she/is it
+    """
     to_clean = "( is he )|( is she )|( is it )"
     if re.search(to_clean, q):
       if (self.count_num_of_verbs(q) > 1):
         q = re.sub(to_clean, ' ', q)
     return q
 
-  # Heuristic 9 First verb after which in continuous sense
-  def convert_fbawics(self,q):
+  # Heuristic 9 First verb after which in continuous tense
+  def convert_continuous_to_present(self,q):
+    """
+    if the first verb is in continuous tense, change it to nomal
+    """
     verb_tags = self.valid_verbs
     text = q
     tokens = nltk.word_tokenize(text.lower())
@@ -188,13 +215,16 @@ class HeuristicsTransformer:
           except:
             break
           break
-      else:
-        break
+        else:
+            break
       ind = ind + 1
     return q
 
   # Heuristic 10 fix "name which" "identify which"
-  def remove_niw(self,q):
+  def remove_name_which(self,q):
+    """
+    remove name which/identify which
+    """
     to_clean = "identify which|name which"
     if re.search(to_clean, q):
       q = re.sub(to_clean, 'which', q)
@@ -215,7 +245,7 @@ class HeuristicsTransformer:
         count_3 = count_3 + 1
     return (count_1,count_2,count_3)
 
-  # Heuristic11
+  # Heuristic11 convert this to which
   def no_wh_words(self,qb_id, q):
     result = q
     wh_words = self.wh_words
@@ -402,25 +432,29 @@ class HeuristicsTransformer:
 
   # quality checking for each NQlike question
   def quality_check(self,qb_id, q):
-    q = self.remove_niw(q)
-    q = self.clean_marker(q)
-    q = self.clean_answer_type(q)
-    q = self.drop_after_semicolon(q)
-    q = self.convert_fbawics(q)
-    q = self.no_wh_words(qb_id, q)
-    q = self.this_is_pattern(qb_id, q)
-    q = self.WDT_BE_pattern(q)
-    q = self.no_WDT_and_WRB(qb_id, q)
-    q = self.VERB_AUX_at_beginning(qb_id, q)
-    q = self.which_none_is(qb_id, q)
-    q = self.what_is_which(q)
-    q = self.remove_end_be_verbs(q)
-    q = self.remove_extra_AUX(q)
-    q = self.remove_pattern(q)
-    q = self.remove_rep_subject(q)
-    q = self.remove_bd(q)
-    q = self.remove_rbv(q)
-    q = self.fix_no_verb(q)
+    try:
+      q = self.remove_name_which(q)
+      q = self.clean_marker(q)
+      q = self.clean_answer_type(q)
+      q = self.drop_after_semicolon(q)
+      q = self.convert_continuous_to_present(q)
+      q = self.no_wh_words(qb_id, q)
+      q = self.this_is_pattern(qb_id, q)
+      q = self.WDT_BE_pattern(q)
+      q = self.no_WDT_and_WRB(qb_id, q)
+      q = self.VERB_AUX_at_beginning(qb_id, q)
+      q = self.which_none_is(qb_id, q)
+      q = self.what_is_which(q)
+      q = self.remove_end_be_verbs(q)
+      q = self.remove_extra_AUX(q)
+      q = self.remove_pattern(q)
+      q = self.remove_rep_subject(q)
+      q = self.remove_BE_determiner(q)
+      q = self.remove_repeat_verb(q)
+      q = self.fix_no_verb(q)
+      q = self.add_space_before_punctuation(q)
+    except:
+      pass
     return q
 
 class AnswerTypeClassifier:
@@ -976,6 +1010,7 @@ class QuestionRewriter:
       # parse tree
       qb_id = str(qb_id)
       nq_like_questions = []
+      orig_output_before_transformation = []
 
       # generate candidates from qb_question
       chunks, clusters = self.generate_candidate_chunks_from_qb_question(question)
@@ -995,19 +1030,29 @@ class QuestionRewriter:
       for ii, chunk in filtered_chunks:
         # with the same qid
         nq_like_questions.append(chunk)
+        orig_output_before_transformation.append(chunk)
       for i in range(len(nq_like_questions)):
         # check if no pronouns in the question
-        self.deal_with_no_pronouns_cases(qb_id, nq_like_questions[i])
-        if i == len(nq_like_questions)-1:
-          # last sent transformation
-          nq_like_questions[i] = self.last_sent_transform(nq_like_questions[i])
-          nq_like_questions[i] = self.heuristicsTransformer.quality_check(qb_id, nq_like_questions[i])
-        else:
-          # intermediate sent transformation
-          nq_like_questions[i] = self.intermediate_sent_transform(qb_id, nq_like_questions[i])
-          nq_like_questions[i] = self.heuristicsTransformer.quality_check(qb_id, nq_like_questions[i])
+        try:
+          self.deal_with_no_pronouns_cases(qb_id, nq_like_questions[i])
+          if i == len(nq_like_questions)-1:
+            # last sent transformation
+            nq_like_questions[i] = self.last_sent_transform(nq_like_questions[i])
+            nq_like_questions[i] = self.heuristicsTransformer.quality_check(qb_id, nq_like_questions[i])
+          else:
+            # intermediate sent transformation
+            nq_like_questions[i] = self.intermediate_sent_transform(qb_id, nq_like_questions[i])
+            nq_like_questions[i] = self.heuristicsTransformer.quality_check(qb_id, nq_like_questions[i])
+        except:
+          continue
       # return a NQlike list from one qb question
-      return nq_like_questions
+      nq_like_questions_with_its_orig_outputs = []
+      for nq_like, orig_output in zip(nq_like_questions, orig_output_before_transformation):
+          nq_like_questions_with_its_orig_output = {}
+          nq_like_questions_with_its_orig_output['nq_like_questions'] = nq_like
+          nq_like_questions_with_its_orig_output['orig_output_before_transformation'] = orig_output
+          nq_like_questions_with_its_orig_outputs.append(nq_like_questions_with_its_orig_output)
+      return nq_like_questions_with_its_orig_outputs
 
   def transform_questions(self, input_file, limit):
     if limit > 0:
@@ -1028,7 +1073,7 @@ class QuestionRewriter:
       if ii % 1000 == 0:
         print(transformed[ii])
 
-    return transformed
+    return transformed, qb_id_input
     
   # helper functions
   def capitalization(self, q):
@@ -1061,8 +1106,8 @@ if __name__ == "__main__":
                       help="JSON of frequency for each LAT")
   parser.add_argument('--answer_type_classifier', type=bool, default=False,
                       help="Retrain the answer type classifier from scratch")
-  parser.add_argument('--raw_text_output', type=str, default='raw_nqlike.txt',
-                      help="One question per line of transformed questions")
+  parser.add_argument('--raw_text_output', type=bool, default=True,
+                      help="Save both the raw output before transformation and the transformed questions")
   parser.add_argument('--min_chunk_length', type=int, default=5,
                       help="How long must extracted segment of QB question be?")
   parser.add_argument('--config_file', type=str, default='config.json',
@@ -1105,17 +1150,48 @@ if __name__ == "__main__":
 
   # save NQlike questions
   if args.save_result:
-    nq_like_df = {
-      'qanta_id':[],
-      'question':[],
-    }
+    if args.raw_text_output:
+        nq_like_df = {
+          'qanta_id':[],
+          'question':[],
+          'orig_output_before_transformation':[],
+        }
+    else:
+        nq_like_df = {
+          'qanta_id':[],
+          'question':[],
+        }
 
-    transformed = rewriter.transform_questions(qb_path, limit)
+    transformed, qb_id_input = rewriter.transform_questions(qb_path, limit)
     for key in transformed.keys():
         # nqlike questions for a single QB sample
         nqlist = transformed[key]
         for i in range(len(nqlist)):
             nq_like_df['qanta_id'].append(str(key))
-            nq_like_df['question'].append(nqlist[i])
+            nq_like_df['question'].append(nqlist[i]['nq_like_questions'])
+            if args.raw_text_output:
+                nq_like_df['orig_output_before_transformation'].append(nqlist[i]['orig_output_before_transformation'])
     new_nqlike = pd.DataFrame(nq_like_df)
     new_nqlike.to_json('./nq_like_questions.json', lines=True, orient='records')
+
+    # prepare NQlike and QB with contexts datasets for the classifier retraining QA
+    qb_id_list = qb_id_input.tolist()
+    qb_df = pd.read_json(qb_path, lines=True, orient='records')
+    selected_qb_df = qb_df.loc[qb_df.apply(lambda x: x.qanta_id in qb_id_list, axis=1)]
+    selected_qb_df = selected_qb_df.rename(columns={'score': 'quality_score'})
+    # save QB_with_contexts
+    selected_qb_df.to_json('./qb_with_contexts.json', lines=True, orient='records')
+    # mapping nq_like with contexts
+    context_list = []
+    char_spans_list = []
+    answer_list = []
+    for idx in qb_id_list:
+        context_list.append(selected_qb_df.loc[selected_qb_df['qanta_id'] == idx]['context'])
+        char_spans_list.append(selected_qb_df.loc[selected_qb_df['qanta_id'] == idx]['char_spans'])
+        answer_list.append(selected_qb_df.loc[selected_qb_df['qanta_id'] == idx]['answer'])
+    # save nqlike_with_contexts
+    #nqlike_list = new_nqlike.loc[new_nqlike.apply(lambda x: x.qanta_id in qb_id_list, axis=1)]['question'].tolist()
+    nqlike_list = new_nqlike['question'].tolist()
+    nqlike_with_contexts_df = pd.DataFrame(list(zip(qb_id_list, nqlike_list, context_list, char_spans_list, answer_list)), columns =['qanta_id', 'question', 'context', 'char_spans', 'answer'])
+    nqlike_with_contexts_df['quality_score'] = 1
+    nqlike_with_contexts_df.to_json('./nqlike_with_contexts.json', lines=True, orient='records')
