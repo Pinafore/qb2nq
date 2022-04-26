@@ -203,7 +203,7 @@ def retrieve_most_freq_answer_type_for_qid(qanta_train_with_answer_type_path):
   return
 
 if __name__ == "__main__":
-  orig_qb_path = 'qanta.train.2021.12.20.json'
+  orig_qb_path = 'qanta.train.2018.04.18.json'
   # load configuration 
   with open('config.json', 'r') as f:
     config = json.load(f)
