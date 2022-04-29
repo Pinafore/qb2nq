@@ -1,5 +1,8 @@
-all: TriviaQuestion2NQ_Transform_Dataset qanta.train.2018.04.18.json neuralcoref
-	
+
+
+prereqs: TriviaQuestion2NQ_Transform_Dataset qanta.train.2018.04.18.json neuralcoref
+	echo "Done"
+
 qanta.train.2018.04.18.json: 
 	wget https://s3-us-west-2.amazonaws.com/pinafore-us-west-2/qanta-jmlr-datasets/qanta.train.2018.04.18.json
 
@@ -21,21 +24,13 @@ neuralcoref:
 	pip install -r requirements.txt; \
 	pip install -e .; \
 
-# generate nq_like data and train classifier
-generate_frequency: lat_frequency.json
-
-create_nq_like: nq_like_questions.json
-
-generate_classifier: logistic_regression_weight_dict_Qb_NQ.txt
-
 lat_frequency.json: compute_lat_frequency.py qanta.train.2018.04.18.json TriviaQuestion2NQ_Transform_Dataset
-	python3 compute_lat_frequency.py; \
-	touch compute_lat_frequency.py; \
+	python3 compute_lat_frequency.py
 
 nq_like_questions.json: transform_question.py TriviaQuestion2NQ_Transform_Dataset neuralcoref
 	python3 transform_question.py; \
 	touch transform_question.py; \
-	
+
 logistic_regression_weight_dict_Qb_NQ.txt: quality_classifier.py TriviaQuestion2NQ_Transform_Dataset
 	python3 quality_classifier.py; \
 	touch quality_classifier.py; \
@@ -49,11 +44,10 @@ NQ_plus_NQlike_baseline_validation_seq: NQ_NQlike_train_seq_epoch1.txt
 # plot EM
 EM_from_QA_plotting: plot_nq_nqlike_seq_epoch1.png
 
-	
 NQ_NQlike_train_seq_checkpoints: NQ_plus_NQlike_baseline_train_seq.py TriviaQuestion2NQ_Transform_Dataset
 	python3 NQ_plus_NQlike_baseline_train_seq.py; \
 	touch NQ_plus_NQlike_baseline_train_seq.py; \
-	
+
 NQ_NQlike_train_seq_epoch1.txt: NQ_plus_NQlike_baseline_validation_seq.py TriviaQuestion2NQ_Transform_Dataset
 	python3 NQ_plus_NQlike_baseline_validation_seq.py; \
 	touch NQ_plus_NQlike_baseline_validation_seq.py; \

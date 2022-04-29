@@ -732,12 +732,13 @@ class QuestionRewriter:
     or q.split(' ')[:2] == ['Give', 'the'] or q.split(' ')[:2] == ['give', 'the']:
       doc = nlp(q)
       tok = []
-      flag=0
+
+      flag = False
       for i,token in enumerate(doc[2:6]):
         if token.pos_ == 'NOUN':
           #print('Noun Token = ', token)
           tok.append(str(token))
-          flag=1
+          noun_found = True
         else:
           if flag:
             break
@@ -1119,21 +1120,28 @@ if __name__ == "__main__":
   limit = args.limit
   qb_df = None
 
+  
+  print("Loading answer type ... ")
   answer_type_dict = pd.read_json(args.lat_freq, lines=True, orient='records').to_dict()
+  print("done")
 
   # read contents from config.json file
   with open(args.config_file) as json_file:
     config = json.load(json_file)
 
+  print("Loading tokenizer and last sentences ... ")
   tokenizer = DistilBertTokenizerFast.from_pretrained(config["tokenizer"])
   loaded_model = TFDistilBertForSequenceClassification.from_pretrained(config["loaded_model"])
   with open(config["last_sent_word_transform_30000"], 'r') as f:
     last_sent_word_transform_30000 = json.load(f)
+  print("done")
   
 
   transformer = HeuristicsTransformer(config)
 
+  print("Loading answer type classifier ...")
   answerTypeClassifier = AnswerTypeClassifier(last_sent_word_transform_30000=last_sent_word_transform_30000, tokenizer=tokenizer, loaded_model=loaded_model)
+  print("done")
 
   rewriter = QuestionRewriter(answer_type_dict, args.min_chunk_length,
                               to_trim=config["to_trim"],
@@ -1172,7 +1180,7 @@ if __name__ == "__main__":
             if args.raw_text_output:
                 nq_like_df['orig_output_before_transformation'].append(nqlist[i]['orig_output_before_transformation'])
     new_nqlike = pd.DataFrame(nq_like_df)
-    new_nqlike.to_json('./nq_like_questions.json', lines=True, orient='records')
+    new_nqlike.to_json('./nq_like_questions.json', orient='index', indent=2)
 
     # prepare NQlike and QB with contexts datasets for the classifier retraining QA
     qb_id_list = qb_id_input.tolist()
@@ -1180,7 +1188,7 @@ if __name__ == "__main__":
     selected_qb_df = qb_df.loc[qb_df.apply(lambda x: x.qanta_id in qb_id_list, axis=1)]
     selected_qb_df = selected_qb_df.rename(columns={'score': 'quality_score'})
     # save QB_with_contexts
-    selected_qb_df.to_json('./qb_with_contexts.json', lines=True, orient='records')
+    selected_qb_df.to_json('./qb_with_contexts.json', orient='index', indent=2)
     # mapping nq_like with contexts
     context_list = []
     char_spans_list = []
