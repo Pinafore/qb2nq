@@ -24,11 +24,6 @@ from sklearn.preprocessing import LabelEncoder
 from collections import defaultdict
 
 from collections import Counter
-#nltk.download('punkt')
-#nltk.download('stopwords')
-#nltk.download('wordnet')
-#nltk.download('averaged_perceptron_tagger')
-#nltk.download('omw-1.4')
 
 nlp = spacy.load('en_core_web_sm')
 neuralcoref.add_to_pipe(nlp)
@@ -57,7 +52,8 @@ class HeuristicsTransformer:
     """
     to_clean = r"\"|\'|\(|\)|,|\.|\s"
     has_heuristic = False
-    q_array = nltk.word_tokenize(q.lower())
+    
+    q_array = self.current_analysis["nltk_tokens"]
     array_leng = len(q_array)
     while re.match(to_clean, q_array[array_leng-1]):
       q_array = q_array[:array_leng-1]
@@ -116,9 +112,8 @@ class HeuristicsTransformer:
       verb_tags = self.strictly_valid_verbs
     else:
       verb_tags = self.valid_verbs
-    tokens = nltk.word_tokenize(text.lower())
-    text = nltk.Text(tokens)
-    tagged = nltk.pos_tag(text)
+    tokens = self.current_analysis["nltk_tokens"]
+    tagged = self.current_analysis["nltk_tags"]
     counted = Counter(tag for word,tag in tagged)
     num_of_verb = 0
     for v in verb_tags:
@@ -151,7 +146,7 @@ class HeuristicsTransformer:
     """
     add space before punctuation because in NQ there's space before all types of punctuation
     """
-    tokens = nltk.word_tokenize(q.lower())
+    tokens = self.current_analysis["nltk_tokens"]
     q = ' '.join(tokens)
     return q
 
@@ -160,9 +155,8 @@ class HeuristicsTransformer:
     """
     add BE verb when there's no verb in the entire question
     """
-    tokens = nltk.word_tokenize(text.lower())
-    text = nltk.Text(tokens)
-    tagged = nltk.pos_tag(text)
+    tokens = self.current_analysis["nltk_tokens"]
+    tagged = self.current_analysis["nltk_tags"]
     ind = 0
     for tk,tg in tagged:
       if tg == 'NN' or tg == 'NNP':
@@ -196,10 +190,9 @@ class HeuristicsTransformer:
     if the first verb is in continuous tense, change it to nomal
     """
     verb_tags = self.valid_verbs
-    text = q
-    tokens = nltk.word_tokenize(text.lower())
-    text = nltk.Text(tokens)
-    tagged = nltk.pos_tag(text)
+    tokens = self.current_analysis["nltk_tokens"]
+    tagged = self.current_analysis["nltk_tags"]
+
     ind = 0
     for tk,tg in tagged:
       if tg in verb_tags:
@@ -253,7 +246,7 @@ class HeuristicsTransformer:
     return result
 
   # Heuristic12
-  def this_is_pattern(self,qb_id, q):
+  def replace_this_is(self,qb_id, q):
     """
     Replace 'this' to 'which'+answer_type within 'this is' pattern.
     """
@@ -289,12 +282,12 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic14: double auxiliary words
-  def remove_extra_AUX(self,q):
+  def remove_extra_AUX(self, qb_id, q):
     """
     Remove extra auxiliary words.
     """
     x = q
-    doc_dep = nlp(x)
+    doc_dep = self.current_analysis["spacy"]
     lemma_lst = []
     tokem_text_lst = []
     for k in range(len(doc_dep)):
@@ -316,7 +309,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic15: WDT+BE patterns
-  def WDT_BE_pattern(self,q):
+  def replace_which_with_this(self, qb_id, q):
     """
     Convert 'which' to 'that' and check if no 'which' present anymore, if so, convert 'this' to 'which'.
     """
@@ -341,12 +334,12 @@ class HeuristicsTransformer:
   # Heuristic16: 
   # WDT tag: which/what
   # WRB tag: where/why/when
-  def no_WDT_and_WRB(self,qb_id, q):
+  def add_question_word(self,qb_id, q):
     """
     Adding 'which+answer_type' at the beginning when no WDT/WRB present.
     """
     x = q
-    doc_dep = nlp(x)
+    doc_dep = self.current_analysis["spacy"]
     tag_lst = []
     tokem_text_lst = []
     for k in range(len(doc_dep)):
@@ -368,8 +361,8 @@ class HeuristicsTransformer:
     """
     Adding 'which+answer_type' at the beginning when starting with VERB/AUX and missing the subject.
     """
-    x = q
-    doc_dep = nlp(x)
+
+    doc_dep = self.current_analysis["spacy"]
     pos_lst = []
     tokem_text_lst = []
     for k in range(len(doc_dep)):
@@ -378,12 +371,13 @@ class HeuristicsTransformer:
     if pos_lst[0]=='AUX' or pos_lst[0]=='VERB':
       # adding answer type at the beginning
       qb_id = str(qb_id)
-      if qb_id in self.answer_type_dict.keys():
+      if qb_id in self.answer_type_dict:
         answer_type = self.answer_type_dict[qb_id] # get the answer type from qb_id
-        result = 'which '+answer_type+' '+x
-        q = result
+        q = 'which '+answer_type+' '+ q
       else:
         print(qb_id+'is not in the frequency table!')
+        
+    assert not q.startswith("which none is")
     return q
 
   # Heuristic18: 'which none is' patterns
@@ -404,7 +398,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic19: 'what is which' pattern
-  def what_is_which(self,q):
+  def what_is_which(self, qb_id, q):
     """
     Remove "what is" from "what is which".
     """
@@ -416,29 +410,33 @@ class HeuristicsTransformer:
     return q
 
   def __call__(self, qb_id, question):
+    text = nltk.Text(tokens)
+    tagged = nltk.pos_tag(text)    
+    self.current_anlysis = {"spacy": nlp(question), "nltk_tokens": nltk.word_tokenize(question.lower()), "nltk_pos": tagged}
     try:
-      question = self.remove_name_which(question)
-      question = self.clean_marker(question)
-      question = self.clean_answer_type(question)
-      question = self.drop_after_semicolon(question)
-      question = self.convert_continuous_to_present(question)
+      question = self.remove_name_which(qb_id, question)
+      question = self.clean_marker(qb_id, question)
+      question = self.clean_answer_type(qb_id, question)
+      question = self.drop_after_semicolon(qb_id, question)
+      question = self.convert_continuous_to_present(qb_id, question)
       question = self.no_wh_words(qb_id, question)
-      question = self.this_is_pattern(qb_id, question)
-      question = self.WDT_BE_pattern(question)
-      question = self.no_WDT_and_WRB(qb_id, question)
+      question = self.replace_this_is(qb_id, question)
+      question = self.replace_which_with_this(qb_id, question)
+      question = self.add_question_word(qb_id, question)
       question = self.add_subject(qb_id, question)
       question = self.which_none_is(qb_id, question)
-      question = self.what_is_which(question)
-      question = self.remove_end_be_verbs(question)
-      question = self.remove_extra_AUX(question)
-      question = self.remove_pattern(question)
-      question = self.remove_rep_subject(question)
-      question = self.remove_BE_determiner(question)
-      question = self.remove_repeat_verb(question)
-      question = self.fix_no_verb(question)
+      question = self.what_is_which(qb_id, question)
+      question = self.remove_end_be_verbs(qb_id, question)
+      question = self.remove_extra_AUX(qb_id, question)
+      question = self.remove_pattern(qb_id, question)
+      question = self.remove_rep_subject(qb_id, question)
+      question = self.remove_BE_determiner(qb_id, question)
+      question = self.remove_repeat_verb(qb_id, question)
+      question = self.fix_no_verb(qb_id, question)
       question = self.add_space_before_punctuation(question)
     except:
       pass
+    self.current_analysis = None
     return q
 
 class AnswerTypeClassifier:
