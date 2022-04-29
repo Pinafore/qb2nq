@@ -413,29 +413,28 @@ class HeuristicsTransformer:
     text = nltk.Text(tokens)
     tagged = nltk.pos_tag(text)    
     self.current_anlysis = {"spacy": nlp(question), "nltk_tokens": nltk.word_tokenize(question.lower()), "nltk_pos": tagged}
-    try:
-      question = self.remove_name_which(qb_id, question)
-      question = self.clean_marker(qb_id, question)
-      question = self.clean_answer_type(qb_id, question)
-      question = self.drop_after_semicolon(qb_id, question)
-      question = self.convert_continuous_to_present(qb_id, question)
-      question = self.no_wh_words(qb_id, question)
-      question = self.replace_this_is(qb_id, question)
-      question = self.replace_which_with_this(qb_id, question)
-      question = self.add_question_word(qb_id, question)
-      question = self.add_subject(qb_id, question)
-      question = self.which_none_is(qb_id, question)
-      question = self.what_is_which(qb_id, question)
-      question = self.remove_end_be_verbs(qb_id, question)
-      question = self.remove_extra_AUX(qb_id, question)
-      question = self.remove_pattern(qb_id, question)
-      question = self.remove_rep_subject(qb_id, question)
-      question = self.remove_BE_determiner(qb_id, question)
-      question = self.remove_repeat_verb(qb_id, question)
-      question = self.fix_no_verb(qb_id, question)
-      question = self.add_space_before_punctuation(question)
-    except:
-      pass
+
+    question = self.remove_name_which(qb_id, question)
+    question = self.clean_marker(qb_id, question)
+    question = self.clean_answer_type(qb_id, question)
+    question = self.drop_after_semicolon(qb_id, question)
+    question = self.convert_continuous_to_present(qb_id, question)
+    question = self.no_wh_words(qb_id, question)
+    question = self.replace_this_is(qb_id, question)
+    question = self.replace_which_with_this(qb_id, question)
+    question = self.add_question_word(qb_id, question)
+    question = self.add_subject(qb_id, question)
+    question = self.which_none_is(qb_id, question)
+    question = self.what_is_which(qb_id, question)
+    question = self.remove_end_be_verbs(qb_id, question)
+    question = self.remove_extra_AUX(qb_id, question)
+    question = self.remove_pattern(qb_id, question)
+    question = self.remove_rep_subject(qb_id, question)
+    question = self.remove_BE_determiner(qb_id, question)
+    question = self.remove_repeat_verb(qb_id, question)
+    question = self.fix_no_verb(qb_id, question)
+    question = self.add_space_before_punctuation(qb_id, question)
+      
     self.current_analysis = None
     return q
 
