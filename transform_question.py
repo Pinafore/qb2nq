@@ -230,21 +230,6 @@ class HeuristicsTransformer:
       q = re.sub(to_clean, 'which', q)
     return q
 
-  # function counts the number of of questions with 1,2,3 words
-  def count_word_freq(self,q_lst):
-    count_1 = 0
-    count_2 = 0
-    count_3 = 0
-    for q in q_lst:
-      q_array = q.split()
-      if len(q_array) == 1:
-        count_1 = count_1 + 1
-      if len(q_array) == 2:
-        count_2 = count_2 + 1
-      if len(q_array) == 3:
-        count_3 = count_3 + 1
-    return (count_1,count_2,count_3)
-
   # Heuristic11 convert this to which
   def no_wh_words(self,qb_id, q):
     result = q
