@@ -27,8 +27,8 @@ class TestQuestionTransformation(unittest.TestCase):
 
   def test_candidates(self):
       self.assertEqual(self.qr.single_question_transform(1, 
-          'The oldest document written in this language is a letter written in 1521 in the town of Câmpulung, while more recent poets writing in this language include Carmen Sylva and Anton Pann. This language uses five cases, though the genitive and dative cases are identical, as are the nominative and accusative. Tripthongs occur frequently in this language, as in "rusaoică," while interjections in this language include "mamă-mamă." It is more closely related to Dalmatian than to Italian or Spanish, and this language includes the pronouns "noi," "voi," and "eu" ["AY-oo"] and favors labial consonants such as "b" and "m" over velars such as "g" and "k." For 10 points, name this tongue spoken by the members of O-Zone and Nicolae Ceauşescu, an Eastern Romance language spoken in Bucharest.')[:3],
-                       [{'nq_like_questions': 'the oldest document written in which language is a letter written in 1521 in the town of câmpulung', 'orig_output_before_transformation': 'The oldest document written in this language is a letter written in 1521 in the town of Câmpulung , .'}, {'nq_like_questions': 'while more recent poets writ in which language include carmen sylva and anton pann', 'orig_output_before_transformation': 'while more recent poets writing in this language include Carmen Sylva and Anton Pann'}, {'nq_like_questions': 'which language uses five cases', 'orig_output_before_transformation': 'This language uses five cases , .'}])
+          'The oldest document written in this language is a letter written in 1521 in the town of Campulung, while more recent poets writing in this language include Carmen Sylva and Anton Pann. This language uses five cases, though the genitive and dative cases are identical, as are the nominative and accusative. Tripthongs occur frequently in this language, as in "rusaoica," while interjections in this language include "mama-mama." It is more closely related to Dalmatian than to Italian or Spanish, and this language includes the pronouns "noi," "voi," and "eu" ["AY-oo"] and favors labial consonants such as "b" and "m" over velars such as "g" and "k." For 10 points, name this tongue spoken by the members of O-Zone and Nicolae Ceausescu, an Eastern Romance language spoken in Bucharest.')[:3],
+                       [{'nq_like_questions': 'the oldest document written in which language is a letter written in 1521 in the town of campulung', 'orig_output_before_transformation': 'The oldest document written in this language is a letter written in 1521 in the town of Campulung , .'}, {'nq_like_questions': 'while more recent poets writ in which language include carmen sylva and anton pann', 'orig_output_before_transformation': 'while more recent poets writing in this language include Carmen Sylva and Anton Pann'}, {'nq_like_questions': 'which language uses five cases', 'orig_output_before_transformation': 'This language uses five cases , .'}])
 
   def test_trim(self):
     self.assertEqual(self.qr.trim_chunk("and he fasted"),
@@ -50,7 +50,7 @@ class TestQuestionTransformation(unittest.TestCase):
     self.assertEqual(self.transformer.drop_after_semicolon("Henry's words were not transcribed; but no one forgot their eloquence"),
                      "Henry's words were not transcribed")
 
-    self.assertEqual(self.transformer.remove_pattern("for 10 pointsNo man thinks moreÃƒ highly than I do"),
+    self.assertEqual(self.transformer.remove_pattern("for 10 pointsNo man thinks more highly than I do"),
                      "No man thinks more highly than I do")
 
     self.assertEqual(self.transformer.remove_rep_subject("Why man is this man often see the same subject in different lights"),

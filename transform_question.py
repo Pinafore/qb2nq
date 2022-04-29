@@ -415,29 +415,28 @@ class HeuristicsTransformer:
       q = result
     return q
 
-  # quality checking for each NQlike question
-  def quality_check(self,qb_id, q):
+  def __call__(self, qb_id, question):
     try:
-      q = self.remove_name_which(q)
-      q = self.clean_marker(q)
-      q = self.clean_answer_type(q)
-      q = self.drop_after_semicolon(q)
-      q = self.convert_continuous_to_present(q)
-      q = self.no_wh_words(qb_id, q)
-      q = self.this_is_pattern(qb_id, q)
-      q = self.WDT_BE_pattern(q)
-      q = self.no_WDT_and_WRB(qb_id, q)
-      q = self.VERB_AUX_at_beginning(qb_id, q)
-      q = self.which_none_is(qb_id, q)
-      q = self.what_is_which(q)
-      q = self.remove_end_be_verbs(q)
-      q = self.remove_extra_AUX(q)
-      q = self.remove_pattern(q)
-      q = self.remove_rep_subject(q)
-      q = self.remove_BE_determiner(q)
-      q = self.remove_repeat_verb(q)
-      q = self.fix_no_verb(q)
-      q = self.add_space_before_punctuation(q)
+      question = self.remove_name_which(question)
+      question = self.clean_marker(question)
+      question = self.clean_answer_type(question)
+      question = self.drop_after_semicolon(question)
+      question = self.convert_continuous_to_present(question)
+      question = self.no_wh_words(qb_id, question)
+      question = self.this_is_pattern(qb_id, question)
+      question = self.WDT_BE_pattern(question)
+      question = self.no_WDT_and_WRB(qb_id, question)
+      question = self.VERB_AUX_at_beginning(qb_id, question)
+      question = self.which_none_is(qb_id, question)
+      question = self.what_is_which(question)
+      question = self.remove_end_be_verbs(question)
+      question = self.remove_extra_AUX(question)
+      question = self.remove_pattern(question)
+      question = self.remove_rep_subject(question)
+      question = self.remove_BE_determiner(question)
+      question = self.remove_repeat_verb(question)
+      question = self.fix_no_verb(question)
+      question = self.add_space_before_punctuation(question)
     except:
       pass
     return q
@@ -1024,11 +1023,11 @@ class QuestionRewriter:
           if i == len(nq_like_questions)-1:
             # last sent transformation
             nq_like_questions[i] = self.last_sent_transform(nq_like_questions[i])
-            nq_like_questions[i] = self.heuristicsTransformer.quality_check(qb_id, nq_like_questions[i])
+            nq_like_questions[i] = self.heuristicsTransformer(qb_id, nq_like_questions[i])
           else:
             # intermediate sent transformation
             nq_like_questions[i] = self.intermediate_sent_transform(qb_id, nq_like_questions[i])
-            nq_like_questions[i] = self.heuristicsTransformer.quality_check(qb_id, nq_like_questions[i])
+            nq_like_questions[i] = self.heuristicsTransformer(qb_id, nq_like_questions[i])
         except:
           continue
       # return a NQlike list from one qb question
