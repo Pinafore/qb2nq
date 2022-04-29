@@ -364,9 +364,9 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic17: VERB/AUX at the beginning of the sample while missing the object
-  def VERB_AUX_at_beginning(self,qb_id, q):
+  def add_subject(self,qb_id, q):
     """
-    Adding 'which+answer_type' at the beginning when starting with VERB/AUX and missing the object.
+    Adding 'which+answer_type' at the beginning when starting with VERB/AUX and missing the subject.
     """
     x = q
     doc_dep = nlp(x)
@@ -426,7 +426,7 @@ class HeuristicsTransformer:
       question = self.this_is_pattern(qb_id, question)
       question = self.WDT_BE_pattern(question)
       question = self.no_WDT_and_WRB(qb_id, question)
-      question = self.VERB_AUX_at_beginning(qb_id, question)
+      question = self.add_subject(qb_id, question)
       question = self.which_none_is(qb_id, question)
       question = self.what_is_which(question)
       question = self.remove_end_be_verbs(question)
