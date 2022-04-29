@@ -51,7 +51,7 @@ class HeuristicsTransformer:
     self.remove_dict = config["remove_dict"]
 
   # Heuristic 1 remove punctuation patterns at the beginning and the end of the question [" ' ( ) , .]
-  def clean_marker(self,q):
+  def clean_marker(self, q):
     """
     Remove punctuation patterns at the beginning and the end of the question
     """
@@ -1096,7 +1096,7 @@ class QuestionRewriter:
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="Apply heuristic functions")
   parser.add_argument('--limit', type=int,
-                      default=20,help="Limit of number of QB questions input")
+                      default=-1,help="Limit of number of QB questions input")
   parser.add_argument('--qb_path', type=str,
                       default='./TriviaQuestion2NQ_Transform_Dataset/qb_train_with_contexts_lower_nopunc_debug_Feb24.json',
                       help="path of the qb dataset")
