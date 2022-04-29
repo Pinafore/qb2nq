@@ -1,5 +1,8 @@
 #Step1. import libraries
 
+import traceback
+import sys
+
 import numpy as np
 import pandas as pd
 import json
@@ -849,9 +852,9 @@ class QuestionRewriter:
 
     heuristic_order = ["add_question_word_if_no_pronouns"]
     if last_sentence:
-      heurisic_order += ["last_sent_transform"]
+      heuristic_order += ["last_sent_transform"]
     else:
-      heuristic_oder += ["intermediate_sent_transform"]
+      heuristic_order += ["intermediate_sent_transform"]
     
     for method_name in heuristic_order + ["remove_name_which",
                                           "clean_marker",
@@ -1150,15 +1153,15 @@ class QuestionRewriter:
 
 
   def single_question_transform(self, qb_id, question):
-      # parse tree
-      qb_id = str(qb_id)
-      nq_like_questions = []
-      orig_output_before_transformation = []
+    # parse tree
+    qb_id = str(qb_id)
+    nq_like_questions = []
+    orig_output_before_transformation = []
 
-      # generate candidates from qb_question
-      chunks, clusters = self.generate_candidate_chunks_from_qb_question(question)
-      #for variant, chunk in enumerate(chunks):
-      for idx in range(len(chunks)):
+    # generate candidates from qb_question
+    chunks, clusters = self.generate_candidate_chunks_from_qb_question(question)
+    #for variant, chunk in enumerate(chunks):
+    for idx in range(len(chunks)):
         id, chunk = chunks[idx]
         # Clean each sentence of trailing and, comma etc
         trimmed_chunk = self.trim_chunk(chunk)
@@ -1166,29 +1169,28 @@ class QuestionRewriter:
         trimmed_chunk = self.substitute_pronouns(trimmed_chunk, clusters)
         chunks[idx] = (id, trimmed_chunk)
     
-      # filter chunks by size
-      filtered_chunks = self.filter_chunks_by_size(chunks)
+    # filter chunks by size
+    filtered_chunks = self.filter_chunks_by_size(chunks)
 
-
-      transformations = []
+    transformations = []
       
-      #print('\033[1m'+'Different nq like statements: (after 2nd breakdown):')
-      for ii, original in enumerate(filtered_chunks):
+    for ii, original in enumerate(filtered_chunks):
 
         # We handle last sentences and intermmediate sentences differently
-        if ii == len(nq_like_questions)-1:
+        if ii == len(filtered_chunks)-1:
             # last sent transformation
-            transformations = self.heuristicsTransformer(qb_id, nq_like_questions[i], last_sentence=True)
+            transformations = self.heuristicsTransformer(qb_id, original, last_sentence=True)
         else:
             # intermediate sent transformation
-            transformations = self.heuristicsTransformer(qb_id, nq_like_questions[i], last_sentence=False)
+            transformations = self.heuristicsTransformer(qb_id, original, last_sentence=False)
 
         for candidate in transformations:
             row = {}
             row['nq_like_questions'] = candidate
             row['orig_output_before_transformation'] = original
+            row['transform'] = transformations[candidate]['transform']
             transformations.append(row)
-    return nq_like_questions_with_its_orig_outputs
+    return transformations
 
   def transform_questions(self, input_file, limit):
     if limit > 0:
