@@ -45,6 +45,51 @@ class HeuristicsTransformer:
     self.non_last_sent_transform_dict = config["non_last_sent_transform_dict"]
     self.remove_dict = config["remove_dict"]
 
+  def add_question_word_if_no_pronouns(self, qb_id, question):
+    qb_id = str(qb_id)
+    # input: questions after the parse tree steps and before transformation
+    q = question[0].lower()+question[1:]
+
+    question_test = nlp(q)
+    pronouns_tags = {"PRON", "WDT", "WP", "WP$", "WRB", "VEZ"}
+    # check whether there are any pronouns or not in the sentence q
+    flag = True
+    for token in question_test:
+      if token.tag_ in pronouns_tags:
+        flag = False
+        break
+
+    if flag == True:
+      # no pronouns in the question
+
+      # check wether answer type is singular or plural
+      answer_type = self.answer_type_dict[qb_id]
+      processed_text = nlp(answer_type)
+      lemma_tags = {"NNS", "NNPS"}
+
+      sigular_plural_flags = True # singular
+      for token in processed_text:
+        if token.tag_ == 'NNPS':
+          sigular_plural_flags = False # plural
+          break
+
+      # check if the first toke is VERB
+      if question_test[0].pos_ == 'VERB' and question_test[1].pos_ != 'PART' and question_test[2].pos_ != 'AUX':
+        replacement = 'which '+answer_type+' '
+        q = replacement+q
+      else:
+        if sigular_plural_flags == False:
+          # plural
+          replacement = 'which '+answer_type+' are '
+          q = replacement+q
+        else:
+          # singular
+          replacement = 'which '+answer_type+' is '
+          q = replacement+q
+    # capitalize the first letter of each sentence
+    q = q[0].upper()+q[1:]
+    return q
+    
   # Heuristic 1 remove punctuation patterns at the beginning and the end of the question [" ' ( ) , .]
   def clean_marker(self, qb_id, q):
     """
@@ -53,7 +98,7 @@ class HeuristicsTransformer:
     to_clean = r"``|\"|\'|\(|\)|,|\.|\s"
     has_heuristic = False
     
-    q_array = self.current_analysis["nltk_tokens"]
+    q_array = self.current_analysis[q]["nltk_tokens"]
     array_leng = len(q_array)
     while re.match(to_clean, q_array[array_leng-1]):
       q_array = q_array[:array_leng-1]
@@ -112,8 +157,8 @@ class HeuristicsTransformer:
       verb_tags = self.strictly_valid_verbs
     else:
       verb_tags = self.valid_verbs
-    tokens = self.current_analysis["nltk_tokens"]
-    tagged = self.current_analysis["nltk_tags"]
+    tokens = self.current_analysis[text]["nltk_tokens"]
+    tagged = self.current_analysis[text]["nltk_tags"]
     counted = Counter(tag for word,tag in tagged)
     num_of_verb = 0
     for v in verb_tags:
@@ -146,7 +191,7 @@ class HeuristicsTransformer:
     """
     add space before punctuation because in NQ there's space before all types of punctuation
     """
-    tokens = self.current_analysis["nltk_tokens"]
+    tokens = self.current_analysis[q]["nltk_tokens"]
     q = ' '.join(tokens)
     return q
 
@@ -155,8 +200,8 @@ class HeuristicsTransformer:
     """
     add BE verb when there's no verb in the entire question
     """
-    tokens = self.current_analysis["nltk_tokens"]
-    tagged = self.current_analysis["nltk_tags"]
+    tokens = self.current_analysis[q]["nltk_tokens"]
+    tagged = self.current_analysis[q]["nltk_tags"]
     ind = 0
     for tk,tg in tagged:
       if tg == 'NN' or tg == 'NNP':
@@ -190,8 +235,8 @@ class HeuristicsTransformer:
     if the first verb is in continuous tense, change it to nomal
     """
     verb_tags = self.valid_verbs
-    tokens = self.current_analysis["nltk_tokens"]
-    tagged = self.current_analysis["nltk_tags"]
+    tokens = self.current_analysis[q]["nltk_tokens"]
+    tagged = self.current_analysis[q]["nltk_tags"]
 
     ind = 0
     for tk,tg in tagged:
@@ -287,7 +332,7 @@ class HeuristicsTransformer:
     Remove extra auxiliary words.
     """
     x = q
-    doc_dep = self.current_analysis["spacy"]
+    doc_dep = self.current_analysis[q]["spacy"]
     lemma_lst = []
     tokem_text_lst = []
     for k in range(len(doc_dep)):
@@ -339,7 +384,7 @@ class HeuristicsTransformer:
     Adding 'which+answer_type' at the beginning when no WDT/WRB present.
     """
     x = q
-    doc_dep = self.current_analysis["spacy"]
+    doc_dep = self.current_analysis[q]["spacy"]
     tag_lst = []
     tokem_text_lst = []
     for k in range(len(doc_dep)):
@@ -362,7 +407,7 @@ class HeuristicsTransformer:
     Adding 'which+answer_type' at the beginning when starting with VERB/AUX and missing the subject.
     """
 
-    doc_dep = self.current_analysis["spacy"]
+    doc_dep = self.current_analysis[q]["spacy"]
     pos_lst = []
     tokem_text_lst = []
     for k in range(len(doc_dep)):
@@ -409,6 +454,7 @@ class HeuristicsTransformer:
       q = result
     return q
 
+<<<<<<< HEAD
   def __call__(self, qb_id, question):
     tokens = nltk.word_tokenize(question.lower())
     text = nltk.Text(tokens)
@@ -444,6 +490,408 @@ class HeuristicsTransformer:
         
     self.current_analysis = None
     return question
+
+class AnswerTypeClassifier:
+
+    def __init__(self, last_sent_word_transform_30000, tokenizer, loaded_model):
+        self.last_sent_word_transform_30000 = last_sent_word_transform_30000
+        self.tokenizer = tokenizer
+        self.loaded_model = loaded_model
+
+    def get_answer_type_group(self, test_sentence):
+        predict_input = self.tokenizer.encode(test_sentence,
+                                      truncation=True,
+                                      padding=True,
+                                      return_tensors="tf")
+        tf_output = self.loaded_model.predict(predict_input)[0]
+        tf_prediction = tf.nn.softmax(tf_output, axis=1)
+        labels = ['NON_PERSON','PERSON']
+        label = tf.argmax(tf_prediction, axis=1)
+        label = label.numpy()
+        return labels[label[0]]
+
+    def answer_type_classifier_training(self):
+        # No need to rerun the answer type classifier to replicate results as we are providing checkpoints for the same
+        # the checkpoints are already provided in the corresponding folder
+    
+        #A PERSON:
+        #     replace 'he/she/who/him' and 'He/She/Who/Him' with 'which + answer_type + is/are'
+        #     replace 'his/whose/she's/he's' and 'His/Whose/She's/He's' with 'which + answer_type's'
+    
+        #A THING:
+        #     replace 'it/this/these' and 'It/This/These' with 'which + answer_type + is/are'
+        #     replace 'it's' and 'It's' with 'which + answer_type's'
+        person_list = []
+        label_list = []
+        for v in self.last_sent_word_transform_30000['who is the']:
+          person_list.append(v)
+          label_list.append('PERSON')
+    
+        non_person_list = []
+        for v in self.last_sent_word_transform_30000['which is the']:
+          non_person_list.append(v)
+          label_list.append('NON-PERSON')
+    
+        for v in self.last_sent_word_transform_30000['what is the']:
+          non_person_list.append(v)
+          label_list.append('NON-PERSON')
+    
+        my_answer_type_list = person_list+non_person_list
+        label_list = label_list[:len(my_answer_type_list)]
+        # convert lists to dataframe
+        zippedList =  list(zip(label_list, my_answer_type_list))
+        classification_df = pd.DataFrame(zippedList, columns=['label','answer_type'])
+    
+        LE = LabelEncoder()
+        classification_df['label'] = LE.fit_transform(classification_df['label'])
+        classification_df.head()
+    
+        groups = classification_df['answer_type'].values.tolist()
+        labels = classification_df['label'].tolist()
+    
+        training_sentences, validation_sentences, training_labels, validation_labels = train_test_split(groups, labels, test_size=.2)
+        tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
+        tokenizer([training_sentences[0]], truncation=True,
+                                    padding=True, max_length=128)
+        train_encodings = tokenizer(training_sentences,
+                                    truncation=True,
+                                    padding=True)
+        val_encodings = tokenizer(validation_sentences,
+                                    truncation=True,
+                                    padding=True)
+        train_dataset = tf.data.Dataset.from_tensor_slices((
+            dict(train_encodings),
+            training_labels
+        ))
+    
+        val_dataset = tf.data.Dataset.from_tensor_slices((
+            dict(val_encodings),
+            validation_labels
+        ))
+    
+        model = TFDistilBertForSequenceClassification.from_pretrained('distilbert-base-uncased',num_labels=2)
+        optimizer = tf.keras.optimizers.Adam(learning_rate=5e-5, epsilon=1e-08)
+        model.compile(optimizer=optimizer, loss=model.compute_loss, metrics=['accuracy'])
+        model.fit(train_dataset.shuffle(100).batch(16),
+                  epochs=3,
+                  batch_size=16,
+                  validation_data=val_dataset.shuffle(100).batch(16))
+    
+        #save the checkpoint
+        model.save_pretrained("./TriviaQuestion2NQ_Transform_Dataset/BERT_Classification/answer_type_classification_model/")
+
+
+# Main
+
+class QuestionRewriter:
+
+  def __init__(self, lat_frequency, min_length, to_trim, valid_verbs, remove_dict, non_last_sent_transform_dict,heuristicsTransformer, answerTypeClassifier):
+    self.lat_frequency = lat_frequency
+=======
+  def preprocess_last_sent(self,q):
+    # to make the last sentence start from the content after 'FTP's (name this/what)
+    # merge the content before 'FTP's into previous sentence
+    q_chunks = ''
+    for k,v in self.remove_dict.items():
+      index = q.find(k)
+      if index!=-1:
+        q_chunks = q[:index] # should merge to previous setence
+        q = q[index:]
+        break
+    for k,v in self.remove_dict.items():
+      q = re.sub(k, v, q)
+    return q, q_chunks
+>>>>>>> 554202d (refactored to put heuristics in main loop, not tested)
+
+  def last_sent_transform(self, qb_id, q_with_the_chunks):
+    q, q_chunks = self.preprocess_last_sent(q_with_the_chunks)
+    if q.split(' ')[:2] == ['name', 'this'] or q.split(' ')[:2] == ['identify', 'this'] or q.split(' ')[:2] == ['give', 'this'] or q.split(' ')[:2] == ['name', 'the'] \
+    or q.split(' ')[:2] == ['Name', 'this'] or q.split(' ')[:2] == ['Identify', 'this'] or q.split(' ')[:2] == ['Give', 'this'] or q.split(' ')[:2] == ['Name', 'the'] \
+    or q.split(' ')[:2] == ['Give', 'the'] or q.split(' ')[:2] == ['give', 'the']:
+      doc = nlp(q)
+      tok = []
+
+      flag = False
+      for i,token in enumerate(doc[2:6]):
+        if token.pos_ == 'NOUN':
+          #print('Noun Token = ', token)
+          tok.append(str(token))
+          noun_found = True
+        else:
+          if flag:
+            break
+      word  = (' ').join(tok)
+
+      replacement = 'which is the'
+      for k,v in self.last_sent_word_transform_30000.items():
+        if k == 'unk':
+          continue
+        if word in v:
+          replacement = k
+          break
+
+      transformed_q = q.split(' ')
+      transformed_q = transformed_q[2:]
+      transformed_q = (' ').join(transformed_q)
+      transformed_q = replacement + ' ' + transformed_q
+    elif q.split(' ')[:2] == ['name', 'these'] or q.split(' ')[:2] == ['identify', 'these'] or q.split(' ')[:2] == ['give', 'these'] \
+    or q.split(' ')[:2] == ['Name', 'these'] or q.split(' ')[:2] == ['Identify', 'these'] or q.split(' ')[:2] == ['Give', 'these'] \
+    or q.split(' ')[:2] == ['Give', 'the'] or q.split(' ')[:2] == ['give', 'the']:
+      doc = nlp(q)
+      tok = []
+      flag=0
+      for i,token in enumerate(doc[2:6]):
+        if token.pos_ == 'NOUN':
+          #print('Noun Token = ', token)
+          tok.append(str(token))
+          flag=1
+        else:
+          if flag:
+            break
+      word  = (' ').join(tok)
+
+      replacement = 'which are the'
+      for k,v in self.last_sent_word_transform_30000.items():
+        if not k == 'unk':
+          continue
+        if word in v:
+          replacement = k
+          break
+      transformed_q = q.split(' ')
+      transformed_q = transformed_q[2:]
+      transformed_q = (' ').join(transformed_q)
+      transformed_q = replacement + ' ' + transformed_q
+    else:
+      transformed_q = q
+    transformed_q = q_chunks+' '+transformed_q
+    # remove adjancent duplicates
+    q = self.remove_duplicates(q)
+    q = q[0].lower()+q[1:]
+    return transformed_q.strip()
+
+  def intermediate_sent_transform(self, qb_id, q):
+    qb_id = str(qb_id)
+    # capitalize the sentences after the answer_type extraction [Aug23: and deal with no pronous cases]
+    self.capitalization(q)
+
+    qb_id = str(qb_id) # match the answer type from answer_type_dict
+    q_orig = q
+    FLAG = 0
+    if qb_id in self.answer_type_dict.keys():
+      answer_type = self.answer_type_dict[qb_id] # get the answer type from qb_id
+      # detect if the answer_type (noun) is a person or a thing
+      if answer_type in self.last_sent_word_transform_30000['who is the']:
+        # answer_type is PERSON
+        replacement_prefix = 'which'
+        replacement = replacement_prefix+' '+answer_type
+        # he/He/he's/He's/his/His/who/Who/whose/Whose
+
+        for k in ['He ', 'Who ', 'She ']:
+          q = re.sub(k, replacement+' ', q, 1)
+          if not q_orig == q:
+            FLAG = 1
+            break
+        if FLAG:
+          return self.steps_before_return(q)
+        for k in ['This ']:
+          q = re.sub(k, 'Which ', q, 1)
+          if not q_orig == q:
+            FLAG = 1
+            break
+        if FLAG:
+          return self.steps_before_return(q)
+        for k in [' he ', ' who ', ' she ', ' him ']:
+          q = re.sub(k, ' '+replacement+' ', q, 1)
+          if not q_orig == q:
+            FLAG = 1
+            break
+        if FLAG:
+          return self.steps_before_return(q)
+        for k in [' this ']:
+          q = re.sub(k, ' '+' which ', q, 1)
+          if not q_orig == q:
+            FLAG = 1
+            break
+        if FLAG:
+          return self.steps_before_return(q)
+        for k in ['He\'s ', 'His ', 'Whose ', 'She\'s ', 'Her ']:
+          q = re.sub(k, replacement+'\'s'+' ', q, 1)
+          if not q_orig == q:
+            FLAG = 1
+            break
+        if FLAG:
+          return self.steps_before_return(q)
+        for k in [' he\'s ', ' his ', ' whose ', ' she\'s ', ' her ']:
+          q = re.sub(k, ' '+replacement+'\'s'+' ', q, 1)
+          if not q_orig == q:
+            FLAG = 1
+            break
+        if FLAG:
+          return self.steps_before_return(q)
+      # answer type is not in the last_sent_word_transform_30000 dictionary
+      else:
+        # classified as PERSON by BERT
+        classification_output = self.answerTypeClassifier.get_answer_type_group(answer_type)
+        if classification_output == 'PERSON':
+          # answer_type is PERSON
+          replacement_prefix = 'which'
+          replacement = replacement_prefix+' '+answer_type
+          # he/He/he's/He's/his/His/who/Who/whose/Whose
+          for k in ['He ', 'Who ', 'She ']:
+            q = re.sub(k, replacement+' ', q, 1)
+            if not q_orig == q:
+              FLAG = 1
+              break
+          if FLAG:
+            return self.steps_before_return(q)
+          for k in ['This ']:
+            q = re.sub(k, 'Which ', q, 1)
+            if not q_orig == q:
+              FLAG = 1
+              break
+          if FLAG:
+            return self.steps_before_return(q)
+          for k in [' he ', ' who ', ' she ', ' him ']:
+            q = re.sub(k, ' '+replacement+' ', q, 1)
+            if not q_orig == q:
+              FLAG = 1
+              break
+          if FLAG:
+            return self.steps_before_return(q)
+          for k in [' this ']:
+            q = re.sub(k, ' which ', q, 1)
+            if not q_orig == q:
+              FLAG = 1
+              break
+          if FLAG:
+            return self.steps_before_return(q)
+          for k in ['He\'s ', 'His ', 'Whose ', 'She\'s ', 'Her ']:
+            q = re.sub(k, replacement+'\'s'+' ', q, 1)
+            if not q_orig == q:
+              FLAG = 1
+              break
+          if FLAG:
+            return self.steps_before_return(q)
+          for k in [' he\'s ', ' his ', ' whose ', ' she\'s ', ' her ']:
+            q = re.sub(k, ' '+replacement+'\'s'+' ', q, 1)
+            if not q_orig == q:
+              FLAG = 1
+              break
+          if FLAG:
+            return self.steps_before_return(q)
+        else:
+          # answer_type is a thing
+          replacement_prefix = 'which'
+          replacement = replacement_prefix+' '+answer_type
+          # swap in with the replacement
+          # what/What/what's/What's/it/It/it's/It's/its/Its -> what/What+replacement
+          for k in ['What ', 'It ']:
+            q = re.sub(k, replacement+' ', q, 1)
+            if not q_orig == q:
+              FLAG = 1
+              break
+          if FLAG:
+            return self.steps_before_return(q)
+          for k in ['This ']:
+            q = re.sub(k, 'Which ', q, 1)
+            if not q_orig == q:
+              FLAG = 1
+              break
+          if FLAG:
+            return self.steps_before_return(q)
+          for k in [' what ', ' it ']:
+            q = re.sub(k, ' '+replacement+' ', q, 1)
+            if not q_orig == q:
+              FLAG = 1
+              break
+          if FLAG:
+            return self.steps_before_return(q)
+          for k in [' this ']:
+            q = re.sub(k, ' which ', q, 1)
+            if not q_orig == q:
+              FLAG = 1
+              break
+          if FLAG:
+            return self.steps_before_return(q)
+          for k in ['What\'s ', 'Its ', 'It\'s ']:
+            q = re.sub(k, replacement+'\'s'+' ', q, 1)
+            if not q_orig == q:
+              FLAG = 1
+              break
+          if FLAG:
+            return self.steps_before_return(q)
+          for k in [' what\'s ', ' its ', ' it\'s ']:
+            q = re.sub(k, ' '+replacement+'\'s'+' ', q, 1)
+            if not q_orig == q:
+              FLAG = 1
+              break
+          if FLAG:
+            return self.steps_before_return(q)
+    else:
+        for k,v in self.non_last_sent_transform_dict.items():
+          q = re.sub(' '+k, ' '+v, q, 1)
+          if q.startswith(k):
+            q = v + q[len(k):]
+    return self.steps_before_return(q)
+
+  def steps_before_return(self,q):
+    # remove adjancent duplicates
+    q = self.remove_duplicates(q)
+    q = q[0].lower()+q[1:]
+    return q.strip()
+
+  
+  def __call__(self, qb_id, question, last_sentence):
+    self.current_analysis = {}
+
+    active_set = set([question])
+    applied_transformations = defaultdict(dict)
+
+    heuristic_order = ["add_question_word_if_no_pronouns"]
+    if last_sentence:
+      heurisic_order += ["last_sent_transform"]
+    else:
+      heuristic_oder += ["intermediate_sent_transform"]
+    
+    for method_name in heuristic_order + ["remove_name_which",
+                                          "clean_marker",
+                                          "clean_answer_type",
+                                          "drop_after_semicolon",
+                                          "convert_continuous_to_present",
+                                          "no_wh_words",
+                                          "replace_this_is",
+                                          "replace_which_with_this",
+                                          "add_question_word",
+                                          "add_subject",
+                                          "which_none_is",
+                                          "what_is_which",
+                                          "remove_end_be_verbs",
+                                          "remove_extra_AUX",
+                                          "remove_patterns",
+                                          "remove_rep_subject",
+                                          "remove_BE_determiner",
+                                          "fix_no_verb",
+                                          "add_space_before_punctuation"]:
+      method = getattr(self, method_name)
+      for qq in active_set:
+        try:
+          new_question = method(qb_id, qq)
+        except Exception as exc:
+          print(traceback.format_exc())
+          print(exc)
+          continue
+          
+        if new_question != qq:
+          applied_transformations[new_question]["parent"] = qq
+          applied_transformations[new_question]["transform"] = method_name
+
+          tokens = nltk.word_tokenize(new_question.lower())
+          text = nltk.Text(tokens)
+          tagged = nltk.pos_tag(text)    
+          self.current_analysis[new_question] = {"spacy": nlp(new_question), "nltk_tokens": tokens, "nltk_tags": tagged}
+
+    self.current_analysis = None
+    return applied_transformations
 
 class AnswerTypeClassifier:
 
@@ -699,301 +1147,7 @@ class QuestionRewriter:
           del chunks[1]
       return chunks
 
-  def preprocess_last_sent(self,q):
-    # to make the last sentence start from the content after 'FTP's (name this/what)
-    # merge the content before 'FTP's into previous sentence
-    q_chunks = ''
-    for k,v in self.remove_dict.items():
-      index = q.find(k)
-      if index!=-1:
-        q_chunks = q[:index] # should merge to previous setence
-        q = q[index:]
-        break
-    for k,v in self.remove_dict.items():
-      q = re.sub(k, v, q)
-    return q, q_chunks
 
-  def last_sent_transform(self,q_with_the_chunks):
-    q, q_chunks = self.preprocess_last_sent(q_with_the_chunks)
-    if q.split(' ')[:2] == ['name', 'this'] or q.split(' ')[:2] == ['identify', 'this'] or q.split(' ')[:2] == ['give', 'this'] or q.split(' ')[:2] == ['name', 'the'] \
-    or q.split(' ')[:2] == ['Name', 'this'] or q.split(' ')[:2] == ['Identify', 'this'] or q.split(' ')[:2] == ['Give', 'this'] or q.split(' ')[:2] == ['Name', 'the'] \
-    or q.split(' ')[:2] == ['Give', 'the'] or q.split(' ')[:2] == ['give', 'the']:
-      doc = nlp(q)
-      tok = []
-
-      flag = False
-      for i,token in enumerate(doc[2:6]):
-        if token.pos_ == 'NOUN':
-          #print('Noun Token = ', token)
-          tok.append(str(token))
-          noun_found = True
-        else:
-          if flag:
-            break
-      word  = (' ').join(tok)
-
-      replacement = 'which is the'
-      for k,v in self.last_sent_word_transform_30000.items():
-        if k == 'unk':
-          continue
-        if word in v:
-          replacement = k
-          break
-
-      transformed_q = q.split(' ')
-      transformed_q = transformed_q[2:]
-      transformed_q = (' ').join(transformed_q)
-      transformed_q = replacement + ' ' + transformed_q
-    elif q.split(' ')[:2] == ['name', 'these'] or q.split(' ')[:2] == ['identify', 'these'] or q.split(' ')[:2] == ['give', 'these'] \
-    or q.split(' ')[:2] == ['Name', 'these'] or q.split(' ')[:2] == ['Identify', 'these'] or q.split(' ')[:2] == ['Give', 'these'] \
-    or q.split(' ')[:2] == ['Give', 'the'] or q.split(' ')[:2] == ['give', 'the']:
-      doc = nlp(q)
-      tok = []
-      flag=0
-      for i,token in enumerate(doc[2:6]):
-        if token.pos_ == 'NOUN':
-          #print('Noun Token = ', token)
-          tok.append(str(token))
-          flag=1
-        else:
-          if flag:
-            break
-      word  = (' ').join(tok)
-
-      replacement = 'which are the'
-      for k,v in self.last_sent_word_transform_30000.items():
-        if not k == 'unk':
-          continue
-        if word in v:
-          replacement = k
-          break
-      transformed_q = q.split(' ')
-      transformed_q = transformed_q[2:]
-      transformed_q = (' ').join(transformed_q)
-      transformed_q = replacement + ' ' + transformed_q
-    else:
-      transformed_q = q
-    transformed_q = q_chunks+' '+transformed_q
-    # remove adjancent duplicates
-    q = self.remove_duplicates(q)
-    q = q[0].lower()+q[1:]
-    return transformed_q.strip()
-
-  def intermediate_sent_transform(self, qb_id, q):
-    qb_id = str(qb_id)
-    # capitalize the sentences after the answer_type extraction [Aug23: and deal with no pronous cases]
-    self.capitalization(q)
-
-    qb_id = str(qb_id) # match the answer type from answer_type_dict
-    q_orig = q
-    FLAG = 0
-    if qb_id in self.answer_type_dict.keys():
-      answer_type = self.answer_type_dict[qb_id] # get the answer type from qb_id
-      # detect if the answer_type (noun) is a person or a thing
-      if answer_type in self.last_sent_word_transform_30000['who is the']:
-        # answer_type is PERSON
-        replacement_prefix = 'which'
-        replacement = replacement_prefix+' '+answer_type
-        # he/He/he's/He's/his/His/who/Who/whose/Whose
-
-        for k in ['He ', 'Who ', 'She ']:
-          q = re.sub(k, replacement+' ', q, 1)
-          if not q_orig == q:
-            FLAG = 1
-            break
-        if FLAG:
-          return self.steps_before_return(q)
-        for k in ['This ']:
-          q = re.sub(k, 'Which ', q, 1)
-          if not q_orig == q:
-            FLAG = 1
-            break
-        if FLAG:
-          return self.steps_before_return(q)
-        for k in [' he ', ' who ', ' she ', ' him ']:
-          q = re.sub(k, ' '+replacement+' ', q, 1)
-          if not q_orig == q:
-            FLAG = 1
-            break
-        if FLAG:
-          return self.steps_before_return(q)
-        for k in [' this ']:
-          q = re.sub(k, ' '+' which ', q, 1)
-          if not q_orig == q:
-            FLAG = 1
-            break
-        if FLAG:
-          return self.steps_before_return(q)
-        for k in ['He\'s ', 'His ', 'Whose ', 'She\'s ', 'Her ']:
-          q = re.sub(k, replacement+'\'s'+' ', q, 1)
-          if not q_orig == q:
-            FLAG = 1
-            break
-        if FLAG:
-          return self.steps_before_return(q)
-        for k in [' he\'s ', ' his ', ' whose ', ' she\'s ', ' her ']:
-          q = re.sub(k, ' '+replacement+'\'s'+' ', q, 1)
-          if not q_orig == q:
-            FLAG = 1
-            break
-        if FLAG:
-          return self.steps_before_return(q)
-      # answer type is not in the last_sent_word_transform_30000 dictionary
-      else:
-        # classified as PERSON by BERT
-        classification_output = self.answerTypeClassifier.get_answer_type_group(answer_type)
-        if classification_output == 'PERSON':
-          # answer_type is PERSON
-          replacement_prefix = 'which'
-          replacement = replacement_prefix+' '+answer_type
-          # he/He/he's/He's/his/His/who/Who/whose/Whose
-          for k in ['He ', 'Who ', 'She ']:
-            q = re.sub(k, replacement+' ', q, 1)
-            if not q_orig == q:
-              FLAG = 1
-              break
-          if FLAG:
-            return self.steps_before_return(q)
-          for k in ['This ']:
-            q = re.sub(k, 'Which ', q, 1)
-            if not q_orig == q:
-              FLAG = 1
-              break
-          if FLAG:
-            return self.steps_before_return(q)
-          for k in [' he ', ' who ', ' she ', ' him ']:
-            q = re.sub(k, ' '+replacement+' ', q, 1)
-            if not q_orig == q:
-              FLAG = 1
-              break
-          if FLAG:
-            return self.steps_before_return(q)
-          for k in [' this ']:
-            q = re.sub(k, ' which ', q, 1)
-            if not q_orig == q:
-              FLAG = 1
-              break
-          if FLAG:
-            return self.steps_before_return(q)
-          for k in ['He\'s ', 'His ', 'Whose ', 'She\'s ', 'Her ']:
-            q = re.sub(k, replacement+'\'s'+' ', q, 1)
-            if not q_orig == q:
-              FLAG = 1
-              break
-          if FLAG:
-            return self.steps_before_return(q)
-          for k in [' he\'s ', ' his ', ' whose ', ' she\'s ', ' her ']:
-            q = re.sub(k, ' '+replacement+'\'s'+' ', q, 1)
-            if not q_orig == q:
-              FLAG = 1
-              break
-          if FLAG:
-            return self.steps_before_return(q)
-        else:
-          # answer_type is a thing
-          replacement_prefix = 'which'
-          replacement = replacement_prefix+' '+answer_type
-          # swap in with the replacement
-          # what/What/what's/What's/it/It/it's/It's/its/Its -> what/What+replacement
-          for k in ['What ', 'It ']:
-            q = re.sub(k, replacement+' ', q, 1)
-            if not q_orig == q:
-              FLAG = 1
-              break
-          if FLAG:
-            return self.steps_before_return(q)
-          for k in ['This ']:
-            q = re.sub(k, 'Which ', q, 1)
-            if not q_orig == q:
-              FLAG = 1
-              break
-          if FLAG:
-            return self.steps_before_return(q)
-          for k in [' what ', ' it ']:
-            q = re.sub(k, ' '+replacement+' ', q, 1)
-            if not q_orig == q:
-              FLAG = 1
-              break
-          if FLAG:
-            return self.steps_before_return(q)
-          for k in [' this ']:
-            q = re.sub(k, ' which ', q, 1)
-            if not q_orig == q:
-              FLAG = 1
-              break
-          if FLAG:
-            return self.steps_before_return(q)
-          for k in ['What\'s ', 'Its ', 'It\'s ']:
-            q = re.sub(k, replacement+'\'s'+' ', q, 1)
-            if not q_orig == q:
-              FLAG = 1
-              break
-          if FLAG:
-            return self.steps_before_return(q)
-          for k in [' what\'s ', ' its ', ' it\'s ']:
-            q = re.sub(k, ' '+replacement+'\'s'+' ', q, 1)
-            if not q_orig == q:
-              FLAG = 1
-              break
-          if FLAG:
-            return self.steps_before_return(q)
-    else:
-        for k,v in self.non_last_sent_transform_dict.items():
-          q = re.sub(' '+k, ' '+v, q, 1)
-          if q.startswith(k):
-            q = v + q[len(k):]
-    return self.steps_before_return(q)
-
-  def steps_before_return(self,q):
-    # remove adjancent duplicates
-    q = self.remove_duplicates(q)
-    q = q[0].lower()+q[1:]
-    return q.strip()
-
-  def deal_with_no_pronouns_cases(self,qb_id, q):
-    qb_id = str(qb_id)
-    # input: questions after the parse tree steps and before transformation
-    q = q[0].lower()+q[1:]
-
-    question_test = nlp(q)
-    pronouns_tags = {"PRON", "WDT", "WP", "WP$", "WRB", "VEZ"}
-    # check whether there are any pronouns or not in the sentence q
-    flag = True
-    for token in question_test:
-      if token.tag_ in pronouns_tags:
-        flag = False
-        break
-
-    if flag == True:
-      # no pronouns in the question
-
-      # check wether answer type is singular or plural
-      answer_type = self.answer_type_dict[qb_id]
-      processed_text = nlp(answer_type)
-      lemma_tags = {"NNS", "NNPS"}
-
-      sigular_plural_flags = True # singular
-      for token in processed_text:
-        if token.tag_ == 'NNPS':
-          sigular_plural_flags = False # plural
-          break
-
-      # check if the first toke is VERB
-      if question_test[0].pos_ == 'VERB' and question_test[1].pos_ != 'PART' and question_test[2].pos_ != 'AUX':
-        replacement = 'which '+answer_type+' '
-        q = replacement+q
-      else:
-        if sigular_plural_flags == False:
-          # plural
-          replacement = 'which '+answer_type+' are '
-          q = replacement+q
-        else:
-          # singular
-          replacement = 'which '+answer_type+' is '
-          q = replacement+q
-    # capitalize the first letter of each sentence
-    q = q[0].upper()+q[1:]
-    return
 
   def single_question_transform(self, qb_id, question):
       # parse tree
@@ -1015,32 +1169,26 @@ class QuestionRewriter:
       # filter chunks by size
       filtered_chunks = self.filter_chunks_by_size(chunks)
 
-      #print('\033[1m'+'Different nq like statements: (after 2nd breakdown):')
-      for ii, chunk in filtered_chunks:
-        # with the same qid
-        nq_like_questions.append(chunk)
-        orig_output_before_transformation.append(chunk)
-      for i in range(len(nq_like_questions)):
-        # check if no pronouns in the question
 
-        self.deal_with_no_pronouns_cases(qb_id, nq_like_questions[i])
-        if i == len(nq_like_questions)-1:
+      transformations = []
+      
+      #print('\033[1m'+'Different nq like statements: (after 2nd breakdown):')
+      for ii, original in enumerate(filtered_chunks):
+
+        # We handle last sentences and intermmediate sentences differently
+        if ii == len(nq_like_questions)-1:
             # last sent transformation
-            nq_like_questions[i] = self.last_sent_transform(nq_like_questions[i])
-            nq_like_questions[i] = self.heuristicsTransformer(qb_id, nq_like_questions[i])
+            transformations = self.heuristicsTransformer(qb_id, nq_like_questions[i], last_sentence=True)
         else:
             # intermediate sent transformation
-            nq_like_questions[i] = self.intermediate_sent_transform(qb_id, nq_like_questions[i])
-            nq_like_questions[i] = self.heuristicsTransformer(qb_id, nq_like_questions[i])
+            transformations = self.heuristicsTransformer(qb_id, nq_like_questions[i], last_sentence=False)
 
-      # return a NQlike list from one qb question
-      nq_like_questions_with_its_orig_outputs = []
-      for nq_like, orig_output in zip(nq_like_questions, orig_output_before_transformation):
-          nq_like_questions_with_its_orig_output = {}
-          nq_like_questions_with_its_orig_output['nq_like_questions'] = nq_like
-          nq_like_questions_with_its_orig_output['orig_output_before_transformation'] = orig_output
-          nq_like_questions_with_its_orig_outputs.append(nq_like_questions_with_its_orig_output)
-      return nq_like_questions_with_its_orig_outputs
+        for candidate in transformations:
+            row = {}
+            row['nq_like_questions'] = candidate
+            row['orig_output_before_transformation'] = original
+            transformations.append(row)
+    return nq_like_questions_with_its_orig_outputs
 
   def transform_questions(self, input_file, limit):
     if limit > 0:
@@ -1187,6 +1335,7 @@ if __name__ == "__main__":
     # save nqlike_with_contexts
     #nqlike_list = new_nqlike.loc[new_nqlike.apply(lambda x: x.qanta_id in qb_id_list, axis=1)]['question'].tolist()
     nqlike_list = new_nqlike['question'].tolist()
-    nqlike_with_contexts_df = pd.DataFrame(list(zip(qb_id_list, nqlike_list, context_list, char_spans_list, answer_list)), columns =['qanta_id', 'question', 'context', 'char_spans', 'answer'])
+    nqlike_with_contexts_df = pd.DataFrame(list(zip(qb_id_list, nqlike_list, context_list, char_spans_list, answer_list)),
+                                           columns =['qanta_id', 'question', 'context', 'char_spans', 'answer'])
     nqlike_with_contexts_df['quality_score'] = 1
     nqlike_with_contexts_df.to_json('./nqlike_with_contexts.json', lines=True, orient='records')
