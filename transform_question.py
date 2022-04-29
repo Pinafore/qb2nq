@@ -46,7 +46,7 @@ class HeuristicsTransformer:
     self.remove_dict = config["remove_dict"]
 
   # Heuristic 1 remove punctuation patterns at the beginning and the end of the question [" ' ( ) , .]
-  def clean_marker(self, q):
+  def clean_marker(self, qb_id, q):
     """
     Remove punctuation patterns at the beginning and the end of the question
     """
@@ -69,7 +69,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 2 -- name this answer type correction
-  def clean_answer_type(self,q):
+  def clean_answer_type(self, qb_id, q):
     """
     Convert "-- name this" patterns to "which"
     """
@@ -84,7 +84,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 3 semicolon
-  def drop_after_semicolon(self,q):
+  def drop_after_semicolon(self, qb_id, q):
     """
     Remove contents after semicolon in NQlike
     """
@@ -94,7 +94,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 4 remove pattern issues
-  def remove_pattern(self,q):
+  def remove_pattern(self, qb_id, q):
     """
     Remove bad patterns in NQlike
     """
@@ -120,7 +120,7 @@ class HeuristicsTransformer:
       num_of_verb = num_of_verb + counted[v]
     return num_of_verb
 
-  def remove_rep_subject(self,q):
+  def remove_rep_subject(self, qb_id, q):
     """
     remove is this... pattern
     """
@@ -132,7 +132,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 6 change be determiner to s possession
-  def remove_BE_determiner(self,q):
+  def remove_BE_determiner(self, qb_id, q):
     """
     change is his/is her/is its to 's
     """
@@ -142,7 +142,7 @@ class HeuristicsTransformer:
     return q
 
   # function to add space before punctuation
-  def add_space_before_punctuation(self,q):
+  def add_space_before_punctuation(self, qb_id, q):
     """
     add space before punctuation because in NQ there's space before all types of punctuation
     """
@@ -151,7 +151,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 7 add be verb to questions without verb
-  def add_verb(self,text):
+  def add_verb(self, qb_id, text):
     """
     add BE verb when there's no verb in the entire question
     """
@@ -168,13 +168,13 @@ class HeuristicsTransformer:
       ind = ind + 1
     return ' '.join(tokens)
 
-  def fix_no_verb(self,q):
+  def fix_no_verb(self, qb_id, q):
     if (self.count_num_of_verbs(q, True) == 0):
       q = self.add_verb(q)
     return q
 
   # Heuristic 8 remove repetitive be verb when there's more verbs
-  def remove_repeat_verb(self,q):
+  def remove_repeat_verb(self, qb_id, q):
     """
     remove is he/is she/is it
     """
@@ -185,7 +185,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 9 First verb after which in continuous tense
-  def convert_continuous_to_present(self,q):
+  def convert_continuous_to_present(self, qb_id, q):
     """
     if the first verb is in continuous tense, change it to nomal
     """
@@ -214,7 +214,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 10 fix "name which" "identify which"
-  def remove_name_which(self,q):
+  def remove_name_which(self, qb_id, q):
     """
     remove name which/identify which
     """
@@ -246,7 +246,7 @@ class HeuristicsTransformer:
     return result
 
   # Heuristic12
-  def replace_this_is(self,qb_id, q):
+  def replace_this_is(self, qb_id, q):
     """
     Replace 'this' to 'which'+answer_type within 'this is' pattern.
     """
@@ -267,7 +267,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic13: 'is/are' at the end of questions (after cleaning the wrong punc at the end of the sample)
-  def remove_end_be_verbs(self,q):
+  def remove_end_be_verbs(self, qb_id, q):
     """
     Remove 'is/are' at the end of NQklike questions.
     """
@@ -410,9 +410,10 @@ class HeuristicsTransformer:
     return q
 
   def __call__(self, qb_id, question):
+    tokens = nltk.word_tokenize(question.lower())
     text = nltk.Text(tokens)
     tagged = nltk.pos_tag(text)    
-    self.current_anlysis = {"spacy": nlp(question), "nltk_tokens": nltk.word_tokenize(question.lower()), "nltk_pos": tagged}
+    self.current_analysis = {"spacy": nlp(question), "nltk_tokens": tokens, "nltk_tags": tagged}
 
     question = self.remove_name_which(qb_id, question)
     question = self.clean_marker(qb_id, question)
@@ -436,7 +437,7 @@ class HeuristicsTransformer:
     question = self.add_space_before_punctuation(qb_id, question)
       
     self.current_analysis = None
-    return q
+    return question
 
 class AnswerTypeClassifier:
 
@@ -1015,18 +1016,17 @@ class QuestionRewriter:
         orig_output_before_transformation.append(chunk)
       for i in range(len(nq_like_questions)):
         # check if no pronouns in the question
-        try:
-          self.deal_with_no_pronouns_cases(qb_id, nq_like_questions[i])
-          if i == len(nq_like_questions)-1:
+
+        self.deal_with_no_pronouns_cases(qb_id, nq_like_questions[i])
+        if i == len(nq_like_questions)-1:
             # last sent transformation
             nq_like_questions[i] = self.last_sent_transform(nq_like_questions[i])
             nq_like_questions[i] = self.heuristicsTransformer(qb_id, nq_like_questions[i])
-          else:
+        else:
             # intermediate sent transformation
             nq_like_questions[i] = self.intermediate_sent_transform(qb_id, nq_like_questions[i])
             nq_like_questions[i] = self.heuristicsTransformer(qb_id, nq_like_questions[i])
-        except:
-          continue
+
       # return a NQlike list from one qb question
       nq_like_questions_with_its_orig_outputs = []
       for nq_like, orig_output in zip(nq_like_questions, orig_output_before_transformation):
