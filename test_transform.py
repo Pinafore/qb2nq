@@ -68,7 +68,7 @@ class TestQuestionTransformation(unittest.TestCase):
     self.assertEqual(self.transformer.no_wh_words(-1, "this play begins with the protagonist"),
                      "which play begins with the protagonist")
                      
-    self.assertEqual(self.transformer.this_is_pattern(96407, "this is known as uniform motion."),
+    self.assertEqual(self.transformer.replace_this_is(96407, "this is known as uniform motion."),
                      "which law is known as uniform motion.")
 
     self.assertEqual(self.transformer.remove_end_be_verbs("which jewish holiday is that hymn is"),
@@ -77,13 +77,13 @@ class TestQuestionTransformation(unittest.TestCase):
     self.assertEqual(self.transformer.remove_extra_AUX("which composer is are we a pair"),
                      "which composer are we a pair")   
 
-    self.assertEqual(self.transformer.WDT_BE_pattern("michael green is a current professor at this university , which is where watson and crick discovered dna 's structure"),
+    self.assertEqual(self.transformer.replace_which_with_this("michael green is a current professor at this university , which is where watson and crick discovered dna 's structure"),
                      "michael green is a current professor at which university , that is where watson and crick discovered dna 's structure")
     
-    self.assertEqual(self.transformer.no_WDT_and_WRB(115148,"its modern appellation"),
+    self.assertEqual(self.transformer.add_question_word(115148,"its modern appellation"),
                      "which English explorer is its modern appellation")  
 
-    self.assertEqual(self.transformer.VERB_AUX_at_beginning(152819,"were refused real employment because of logical discrimination"),
+    self.assertEqual(self.transformer.add_subject(152819,"were refused real employment because of logical discrimination"),
                      "which se people were refused real employment because of logical discrimination")  
 
     self.assertEqual(self.transformer.which_none_is(79908,"which none is its longest sections"),
@@ -91,6 +91,7 @@ class TestQuestionTransformation(unittest.TestCase):
     
     self.assertEqual(self.transformer.add_space_before_punctuation("welcome to, the jungle\'s"),
                      "welcome to , the jungle \'s")  
+
 
 
 if __name__ == '__main__':

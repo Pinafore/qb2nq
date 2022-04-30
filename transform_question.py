@@ -50,7 +50,7 @@ class HeuristicsTransformer:
     """
     Remove punctuation patterns at the beginning and the end of the question
     """
-    to_clean = r"\"|\'|\(|\)|,|\.|\s"
+    to_clean = r"``|\"|\'|\(|\)|,|\.|\s"
     has_heuristic = False
     
     q_array = self.current_analysis["nltk_tokens"]
@@ -151,7 +151,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 7 add be verb to questions without verb
-  def add_verb(self, qb_id, text):
+  def add_verb(self, q):
     """
     add BE verb when there's no verb in the entire question
     """
@@ -415,8 +415,6 @@ class HeuristicsTransformer:
     tagged = nltk.pos_tag(text)    
     self.current_analysis = {"spacy": nlp(question), "nltk_tokens": tokens, "nltk_tags": tagged}
 
-    question = self.remove_name_which(qb_id, question)
-    question = self.clean_marker(qb_id, question)
     question = self.clean_answer_type(qb_id, question)
     question = self.drop_after_semicolon(qb_id, question)
     question = self.convert_continuous_to_present(qb_id, question)
@@ -434,6 +432,8 @@ class HeuristicsTransformer:
     question = self.remove_BE_determiner(qb_id, question)
     question = self.remove_repeat_verb(qb_id, question)
     question = self.fix_no_verb(qb_id, question)
+    question = self.clean_marker(qb_id, question)
+    question = self.remove_name_which(qb_id, question)
     question = self.add_space_before_punctuation(qb_id, question)
       
     self.current_analysis = None

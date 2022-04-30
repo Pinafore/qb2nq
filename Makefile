@@ -1,7 +1,8 @@
 
 
 prereqs: TriviaQuestion2NQ_Transform_Dataset qanta.train.2018.04.18.json neuralcoref
-	echo "Done"
+	pip install -r "requirements.txt"; \
+	echo "Done"; \
 
 qanta.train.2018.04.18.json: 
 	wget https://s3-us-west-2.amazonaws.com/pinafore-us-west-2/qanta-jmlr-datasets/qanta.train.2018.04.18.json
@@ -24,8 +25,10 @@ neuralcoref:
 	pip install -r requirements.txt; \
 	pip install -e .; \
 
+#generate nq_like data and train classifier
 lat_frequency.json: compute_lat_frequency.py qanta.train.2018.04.18.json TriviaQuestion2NQ_Transform_Dataset
-	python3 compute_lat_frequency.py
+	python3 compute_lat_frequency.py; \
+	touch compute_lat_frequency.py; \
 
 nq_like_questions.json: transform_question.py TriviaQuestion2NQ_Transform_Dataset neuralcoref
 	python3 transform_question.py; \

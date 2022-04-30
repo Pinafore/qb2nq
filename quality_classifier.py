@@ -290,9 +290,16 @@ class Classifier:
     names = list(self.train_dict.keys())
     #assert len(weights) == (len(self._features)), "Unexpected feature length %i vs %i" % (len(self._features) + 1, len(weights))
     for i in range(0,len(names)-1):
-      feature_weight[names[i+1]] =[weights[i]] 
+      if names[i+1] == 'word2vec':
+        feature_weight[names[i+1]] = weights[i:i+300].tolist()
+      elif names[i+1] == 'unigram':
+        if 'word2vec' in names:
+          feature_weight[names[i+1]] = weights[i+300:].tolist()
+        else: 
+          feature_weight[names[i+1]] = weights[i:].tolist() 
+      else:
+        feature_weight[names[i+1]] =[weights[i]] 
     feature_weight["BIAS"] = model.intercept_[0]
-
     return feature_weight
 
   def save_dictionary(self, questions, dict_data, file_path):   

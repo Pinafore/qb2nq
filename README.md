@@ -17,7 +17,7 @@ make clean
 
 You can run makefile or compute_lat_frequency.py to generate your lat_frequency.json code that is used by transform_question.py. We have provided a default lat_frequency.json to test our code faster.
 ```
-make generate_frequency
+make lat_frequency.json
 ```
 Or
 ```
@@ -26,28 +26,23 @@ python3 compute_lat_frequency.py
 
 You can run makefile or transform_question.py to generate nq_like questions from QB questions. There are a series of arguments you can set for transform_question.py.
 ```
-make create_nq_like
+make nq_like_questions.json
 ```
 Or
 ```
-python3 compute_lat_frequency.py --limit -1 --min_chunk_length 3
+python3 transform_question.py --limit -1 --min_chunk_length 3
 ```
 
---limit: the default argument in transform_question.py is 20 which means our code will convert 20 QB questions to NQ-like questions. Please set --limit argument to -1 for converting the entire QB dataset to NQ-like dataset.
-
+--limit: the default argument in transform_question.py is set to -1 for converting the entire QB dataset to NQ-like dataset.
 --qb_path: sets the path for QB questions dataset.
-
 --lat_freq: sets the path for JSON of frequency for each LAT.
-
 --answer_type_classifier: the default is False, set to True to retrain the answer type classifier from scratch.
-
 --min_chunk_length: sets how long must extracted segment of QB question be.
-
 --config_file: sets the path for config.json with data that configures extraction
 
 You can also run makefile or quality_classifier.py to score the generated NQ-like questions based on their quality.There are a series of arguments you can set for quality_classifier.py.
 ```
-make generate_classifier
+make logistic_regression_weight_dict_Qb_NQ.txt
 ```
 Or
 ```
@@ -55,36 +50,20 @@ python3 quality_classifier.py --limit -1 -f --feature_list length ablength
 ```
 
 --limit: sets the number of questions to train the classifier, please set --limit argument to -1 for converting the entire dataset.
-
---feature_list: sets the list of features that is used for the classifier. 
-
-Valid features include:
-    
-  length: the length of the question.
-    
-  ablength: whether a question is shorter than abnormal length cutoff(default set to 5).
-    
-  kincaid: the kincaid readability score of the question.
-    
-  duplicates: the number of duplicate words of the question.
-    
-  num_nouns: the number of nouns in the question.
-  
-  num_verbs: the number of verbs in the question.
-    
-  max_idf: the max idf of a question.
-    
-  word2vec: the Word2Vec representation of the question.
-    
-  unigram: the unigram representation of the question.
+f --feature_list: sets the list of features that is used for the classifier. Valid features include:
+    length: the length of the question.
+    ablength: whether a question is shorter than abnormal length cutoff(default set to 5).
+    kincaid: the kincaid readability score of the question.
+    duplicates: the number of duplicate words of the question.
+    num_nouns: the number of nouns in the question.
+    num_verbs: the number of verbs in the question.
+    max_idf: the max idf of a question.
+    word2vec: the Word2Vec representation of the question.
+    unigram: the unigram representation of the question.
 --test_predictions: path to save test feature weight dictionary, default set to '/TriviaQuestion2NQ_Transform_Dataset/test_feature_dict_QB_NQ.csv'.
-
 --features: path to save nq-like feature weight dictionary, default set to ''.
-
 --nq_data: path to nq dataset.
-
 --qb_data: path to qb dataset.
-
 --nqlike_data: path to nqlike dataset.
 
 After everything is done, you can generate question answering model and plot the EM score by running:
