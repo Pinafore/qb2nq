@@ -104,17 +104,18 @@ class HeuristicsTransformer:
     
     q_array = self.current_analysis[q]["nltk_tokens"]
     array_leng = len(q_array)
-    while re.match(to_clean, q_array[array_leng-1]):
-      q_array = q_array[:array_leng-1]
-      array_leng = array_leng - 1
-      has_heuristic = True
+    if array_leng > 1:
+    	while re.match(to_clean, q_array[array_leng-1]):
+      		q_array = q_array[:array_leng-1]
+      		array_leng = array_leng - 1
+      		has_heuristic = True
 
-    while re.match(to_clean, q_array[0]):
-      q_array = q_array[1:]
-      array_leng = array_leng - 1
-      has_heuristic = True
-    if has_heuristic:
-      q = ' '.join(q_array)
+    	while re.match(to_clean, q_array[0]):
+      		q_array = q_array[1:]
+      		array_leng = array_leng - 1
+      		has_heuristic = True
+    	if has_heuristic:
+      		q = ' '.join(q_array)
     return q
 
   # Heuristic 2 -- name this answer type correction
@@ -279,7 +280,7 @@ class HeuristicsTransformer:
     wh_re = re.compile("|".join(wh_words))
     if not wh_re.search(q):
       # no wh_words
-      if qb_id in self.answer_type_dict:
+      if qb_id in self.answer_type_dict and len(q) > 1:
           answer_type = self.answer_type_dict[qb_id] # get the answer type from qb_id
           # whether starting from VERB or not
           wn_list = wn.synsets(q.split()[0])
