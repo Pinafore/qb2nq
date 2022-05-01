@@ -25,10 +25,8 @@ neuralcoref:
 	pip install -r requirements.txt; \
 	pip install -e .; \
 
-#generate nq_like data and train classifier
-lat_frequency.json: compute_lat_frequency.py qanta.train.2018.04.18.json TriviaQuestion2NQ_Transform_Dataset
-	python3 compute_lat_frequency.py; \
-	touch compute_lat_frequency.py; \
+intermediate_results/lat_frequency.json: compute_lat_frequency.py qanta.train.2018.04.18.json 
+	python3 compute_lat_frequency.py
 
 nq_like_questions.json: transform_question.py TriviaQuestion2NQ_Transform_Dataset neuralcoref
 	python3 transform_question.py; \

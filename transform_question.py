@@ -28,6 +28,8 @@ from collections import defaultdict
 
 from collections import Counter
 
+from typing import List, Tuple
+
 nlp = spacy.load('en_core_web_sm')
 neuralcoref.add_to_pipe(nlp)
 
@@ -48,8 +50,7 @@ class HeuristicsTransformer:
     self.non_last_sent_transform_dict = config["non_last_sent_transform_dict"]
     self.remove_dict = config["remove_dict"]
 
-  def add_question_word_if_no_pronouns(self, qb_id, question):
-    qb_id = str(qb_id)
+  def add_question_word_if_no_pronouns(self, qb_id: int, question: str) -> str:
     # input: questions after the parse tree steps and before transformation
     q = question[0].lower()+question[1:]
 
@@ -94,7 +95,7 @@ class HeuristicsTransformer:
     return q
     
   # Heuristic 1 remove punctuation patterns at the beginning and the end of the question [" ' ( ) , .]
-  def clean_marker(self, qb_id, q):
+  def clean_marker(self, qb_id: int, q: str) -> str:
     """
     Remove punctuation patterns at the beginning and the end of the question
     """
@@ -117,7 +118,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 2 -- name this answer type correction
-  def clean_answer_type(self, qb_id, q):
+  def clean_answer_type(self, qb_id: int, q: str) -> str:
     """
     Convert "-- name this" patterns to "which"
     """
@@ -132,7 +133,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 3 semicolon
-  def drop_after_semicolon(self, qb_id, q):
+  def drop_after_semicolon(self, qb_id: int, q: str) -> str:
     """
     Remove contents after semicolon in NQlike
     """
@@ -142,7 +143,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 4 remove pattern issues
-  def remove_patterns(self, qb_id, q):
+  def remove_patterns(self, qb_id: int, q: str) -> str:
     """
     Remove bad patterns in NQlike
     """
@@ -168,7 +169,7 @@ class HeuristicsTransformer:
       num_of_verb = num_of_verb + counted[v]
     return num_of_verb
 
-  def remove_rep_subject(self, qb_id, q):
+  def remove_rep_subject(self, qb_id: int, q: str) -> str:
     """
     remove is this... pattern
     """
@@ -180,7 +181,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 6 change be determiner to s possession
-  def remove_BE_determiner(self, qb_id, q):
+  def remove_BE_determiner(self, qb_id: int, q: str) -> str:
     """
     change is his/is her/is its to 's
     """
@@ -190,7 +191,7 @@ class HeuristicsTransformer:
     return q
 
   # function to add space before punctuation
-  def add_space_before_punctuation(self, qb_id, q):
+  def add_space_before_punctuation(self, qb_id: int, q: str) -> str:
     """
     add space before punctuation because in NQ there's space before all types of punctuation
     """
@@ -199,7 +200,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 7 add be verb to questions without verb
-  def add_verb(self, q):
+  def add_verb(self, qb_id: int, q: str) -> str:
     """
     add BE verb when there's no verb in the entire question
     """
@@ -222,7 +223,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 8 remove repetitive be verb when there's more verbs
-  def remove_repeat_verb(self, qb_id, q):
+  def remove_repeat_verb(self, qb_id: int, q: str) -> str:
     """
     remove is he/is she/is it
     """
@@ -233,7 +234,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 9 First verb after which in continuous tense
-  def convert_continuous_to_present(self, qb_id, q):
+  def convert_continuous_to_present(self, qb_id: int, q: str) -> str:
     """
     if the first verb is in continuous tense, change it to nomal
     """
@@ -262,7 +263,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 10 fix "name which" "identify which"
-  def remove_name_which(self, qb_id, q):
+  def remove_name_which(self, qb_id: int, q: str) -> str:
     """
     remove name which/identify which
     """
@@ -272,14 +273,13 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic11 convert this to which
-  def no_wh_words(self,qb_id, q):
+  def no_wh_words(self, qb_id: int, q: str) -> str:
     result = q
     wh_words = self.wh_words
     wh_re = re.compile("|".join(wh_words))
     if not wh_re.search(q):
       # no wh_words
-      qb_id = str(qb_id)
-      if qb_id in self.answer_type_dict.keys():
+      if qb_id in self.answer_type_dict:
           answer_type = self.answer_type_dict[qb_id] # get the answer type from qb_id
           # whether starting from VERB or not
           wn_list = wn.synsets(q.split()[0])
@@ -290,11 +290,12 @@ class HeuristicsTransformer:
               else:
                   result = 'which '+answer_type+' is '+q
       else:
+          print("Missing answer type %i" % qb_id)
           result = re.sub('this', 'which', q, 1)
     return result
 
   # Heuristic12
-  def replace_this_is(self, qb_id, q):
+  def replace_this_is(self, qb_id: int, q: str) -> str:
     """
     Replace 'this' to 'which'+answer_type within 'this is' pattern.
     """
@@ -302,20 +303,19 @@ class HeuristicsTransformer:
     index = x.find('this is')
     if index!=-1:
       # adding answer type
-      qb_id = str(qb_id)
-      if qb_id in self.answer_type_dict.keys():
+      if qb_id in self.answer_type_dict:
         answer_type = self.answer_type_dict[qb_id] # get the answer type from qb_id
         replacement = 'which '+answer_type
         result = re.sub('this is', replacement+' is', x, 1)
         q = result
       else:
-        # answer type is not in the dict
+        print("Missing answer type %i" % qb_id)
         result = re.sub('this', 'which', x, 1)
         q = result
     return q
 
   # Heuristic13: 'is/are' at the end of questions (after cleaning the wrong punc at the end of the sample)
-  def remove_end_be_verbs(self, qb_id, q):
+  def remove_end_be_verbs(self, qb_id: int, q: str) -> str:
     """
     Remove 'is/are' at the end of NQklike questions.
     """
@@ -330,7 +330,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic14: double auxiliary words
-  def remove_extra_AUX(self, qb_id, q):
+  def remove_extra_AUX(self, qb_id: int, q: str) -> str:
     """
     Remove extra auxiliary words.
     """
@@ -357,7 +357,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic15: WDT+BE patterns
-  def replace_which_with_this(self, qb_id, q):
+  def replace_which_with_this(self, qb_id: int, q: str) -> str:
     """
     Convert 'which' to 'that' and check if no 'which' present anymore, if so, convert 'this' to 'which'.
     """
@@ -382,7 +382,7 @@ class HeuristicsTransformer:
   # Heuristic16: 
   # WDT tag: which/what
   # WRB tag: where/why/when
-  def add_question_word(self,qb_id, q):
+  def add_question_word(self, qb_id: int, q: str) -> str:
     """
     Adding 'which+answer_type' at the beginning when no WDT/WRB present.
     """
@@ -396,7 +396,7 @@ class HeuristicsTransformer:
     if ('WRB' in tag_lst)!=True and ('WDT' in tag_lst)!=True:
       # adding answer type at the beginning
       qb_id = str(qb_id)
-      if qb_id in self.answer_type_dict.keys():
+      if qb_id in self.answer_type_dict:
         answer_type = self.answer_type_dict[qb_id] # get the answer type from qb_id
         result = 'which '+answer_type+' is '+x
         q = result
@@ -405,7 +405,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic17: VERB/AUX at the beginning of the sample while missing the object
-  def add_subject(self,qb_id, q):
+  def add_subject(self, qb_id: int, q: str) -> str:
     """
     Adding 'which+answer_type' at the beginning when starting with VERB/AUX and missing the subject.
     """
@@ -429,7 +429,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic18: 'which none is' patterns
-  def which_none_is(self,qb_id, q):
+  def which_none_is(self, qb_id: int, q: str) -> str:
     """
     Convert 'which none is' to 'what is'.
     """
@@ -446,7 +446,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic19: 'what is which' pattern
-  def what_is_which(self, qb_id, q):
+  def what_is_which(self, qb_id: int, q: str) -> str:
     """
     Remove "what is" from "what is which".
     """
@@ -457,7 +457,6 @@ class HeuristicsTransformer:
       q = result
     return q
 
-<<<<<<< HEAD
   def __call__(self, qb_id, question):
     tokens = nltk.word_tokenize(question.lower())
     text = nltk.Text(tokens)
@@ -590,7 +589,7 @@ class QuestionRewriter:
 
   def __init__(self, lat_frequency, min_length, to_trim, valid_verbs, remove_dict, non_last_sent_transform_dict,heuristicsTransformer, answerTypeClassifier):
     self.lat_frequency = lat_frequency
-=======
+
   def preprocess_last_sent(self,q):
     # to make the last sentence start from the content after 'FTP's (name this/what)
     # merge the content before 'FTP's into previous sentence
@@ -604,8 +603,7 @@ class QuestionRewriter:
     for k,v in self.remove_dict.items():
       q = re.sub(k, v, q)
     return q, q_chunks
->>>>>>> 554202d (refactored to put heuristics in main loop, not tested)
-
+    
   def last_sent_transform(self, qb_id, q_with_the_chunks):
     q, q_chunks = self.preprocess_last_sent(q_with_the_chunks)
     if q.split(' ')[:2] == ['name', 'this'] or q.split(' ')[:2] == ['identify', 'this'] or q.split(' ')[:2] == ['give', 'this'] or q.split(' ')[:2] == ['name', 'the'] \
@@ -615,7 +613,9 @@ class QuestionRewriter:
       tok = []
 
       flag = False
-      for i,token in enumerate(doc[2:6]):
+
+      # TODO: These magic numbers seem suspicious
+      for i, token in enumerate(doc[2:6]):
         if token.pos_ == 'NOUN':
           #print('Noun Token = ', token)
           tok.append(str(token))
@@ -672,7 +672,7 @@ class QuestionRewriter:
     q = q[0].lower()+q[1:]
     return transformed_q.strip()
 
-  def intermediate_sent_transform(self, qb_id, q):
+  def intermediate_sent_transform(self, qb_id: int, q: str) -> str:
     qb_id = str(qb_id)
     # capitalize the sentences after the answer_type extraction [Aug23: and deal with no pronous cases]
     self.capitalization(q)
@@ -848,6 +848,7 @@ class QuestionRewriter:
     self.current_analysis = {}
 
     active_set = set([question])
+    print("Initial question set:" + str(question))
     applied_transformations = defaultdict(dict)
 
     heuristic_order = ["add_question_word_if_no_pronouns"]
@@ -876,22 +877,26 @@ class QuestionRewriter:
                                           "fix_no_verb",
                                           "add_space_before_punctuation"]:
       method = getattr(self, method_name)
-      for qq in active_set:
-        try:
-          new_question = method(qb_id, qq)
-        except Exception as exc:
-          print(traceback.format_exc())
-          print(exc)
-          continue
-          
-        if new_question != qq:
-          applied_transformations[new_question]["parent"] = qq
-          applied_transformations[new_question]["transform"] = method_name
 
-          tokens = nltk.word_tokenize(new_question.lower())
+      while len(active_set) > len(self.current_analysis):
+        for qq in [x for x in active_set if x not in self.current_analysis]:
+          tokens = nltk.word_tokenize(qq.lower())
           text = nltk.Text(tokens)
           tagged = nltk.pos_tag(text)    
-          self.current_analysis[new_question] = {"spacy": nlp(new_question), "nltk_tokens": tokens, "nltk_tags": tagged}
+          
+          self.current_analysis[qq] = {"spacy": nlp(qq), "nltk_tokens": tokens, "nltk_tags": tagged}
+          try:
+            new_question = method(qb_id, qq)
+          except Exception as exc:
+            print(traceback.format_exc())
+            print(exc)
+            continue
+          
+          if new_question != qq:
+            print("Adding new question: " + str(new_question))
+            applied_transformations[new_question]["parent"] = qq
+            applied_transformations[new_question]["transform"] = method_name
+            active_set.add(new_question)
 
     self.current_analysis = None
     return applied_transformations
@@ -1067,7 +1072,7 @@ class QuestionRewriter:
 #     chunks = sorted(chunks, key=lambda x: x[0])
 #     return chunks
 
-  def generate_candidate_chunks_from_qb_question(self, question):
+  def generate_candidate_chunks_from_qb_question(self, question: str) -> Tuple[List[Tuple[int, str]], List[neuralcoref.neuralcoref.Cluster]]:
       # input: single qb_question
       sample = question.strip()
       sample = sample.strip('.')
@@ -1119,10 +1124,12 @@ class QuestionRewriter:
               curr_chunk = '' + curr_chunk
     return curr_chunk
       
-  def filter_chunks_by_size(self, candidates):
+  def filter_chunks_by_size(self, candidates: List[Tuple[int, str]]) -> List[Tuple[int, str]]:
       chunks = candidates
       # Ensure no sentences aren't too small
       if len(chunks)>1:
+        # We start at 1 because we may need to merge current chunk
+        # with previous chunk
         for idx in range(1, len(chunks)):
           try:
             curr_i, curr_chunk = chunks[idx]
@@ -1133,6 +1140,7 @@ class QuestionRewriter:
 
           # JBGCOMMENT: Shouldn't the length filter happen after
           # trimming?
+          # JBGCOMMENT: Why is "after" so special?
           if len(curr_chunk.split()) < self.min_length or \
              (curr_chunk.split()[0] in ['after']):
             last_i, last_chunk = chunks[idx-1]
@@ -1142,6 +1150,10 @@ class QuestionRewriter:
           if (idx+1)>=len(chunks):
             break
         curr_i, curr_chunk = chunks[0]
+
+        # The previous loop didn't cover all chunks, so the first
+        # chunk could be short.  We now check it and if it's too short
+        # merge it with the following chunk
         if len(curr_chunk.split()) < self.min_length and len(chunks)>1:
           # Found a small pre-sent!
           last_i, next_chunk = chunks[1]
@@ -1160,7 +1172,10 @@ class QuestionRewriter:
 
     # generate candidates from qb_question
     chunks, clusters = self.generate_candidate_chunks_from_qb_question(question)
-    #for variant, chunk in enumerate(chunks):
+
+    print("Pre-pronoun sub chunks", chunks)
+    
+    # Replace pronouns in each of the chunks
     for idx in range(len(chunks)):
         id, chunk = chunks[idx]
         # Clean each sentence of trailing and, comma etc
@@ -1168,13 +1183,16 @@ class QuestionRewriter:
         # Coreference subsitution
         trimmed_chunk = self.substitute_pronouns(trimmed_chunk, clusters)
         chunks[idx] = (id, trimmed_chunk)
-    
-    # filter chunks by size
-    filtered_chunks = self.filter_chunks_by_size(chunks)
 
-    transformations = []
-      
-    for ii, original in enumerate(filtered_chunks):
+    print("Pre-filter chunks:", chunks)
+    filtered_chunks = self.filter_chunks_by_size(chunks)
+    print("Filtered chunks:", filtered_chunks)
+
+    tranformation_rows = []
+
+    # filter chunks by size already looks like an enumerate.  It's a
+    # tuple of index and the chunks
+    for ii, original in filtered_chunks:
 
         # We handle last sentences and intermmediate sentences differently
         if ii == len(filtered_chunks)-1:
@@ -1186,15 +1204,17 @@ class QuestionRewriter:
 
         for candidate in transformations:
             row = {}
+            row['parent'] = transformations[candidate]["parent"]
+            row['transform'] = transformations[candidate]["transform"]
+            row['transform'] = transformations[candidate]['transform']            
             row['nq_like_questions'] = candidate
             row['orig_output_before_transformation'] = original
-            row['transform'] = transformations[candidate]['transform']
-            transformations.append(row)
-    return transformations
+            tranformation_rows.append(row)
+    return tranformation_rows
 
   def transform_questions(self, input_file, limit):
     if limit > 0:
-      qb_df = pd.read_json(input_file, lines=True, orient='records',nrows=limit)
+      qb_df = pd.read_json(input_file, lines=True, orient='records', nrows=limit)
     else:
       qb_df = pd.read_json(input_file, lines=True, orient='records')
 
@@ -1206,10 +1226,10 @@ class QuestionRewriter:
     transformed = defaultdict(list)
     for qq, ii in zip(qb_questions_input, qb_id_input):
       # transform single QB
-      transformed[ii] = self.single_question_transform(ii, qq)
+      transformed[str(ii)] = self.single_question_transform(ii, qq)
 
       if ii % 1000 == 0:
-        print(transformed[ii])
+        print(transformed[str(ii)])
 
     return transformed, qb_id_input
     
@@ -1250,6 +1270,8 @@ if __name__ == "__main__":
                       help="How long must extracted segment of QB question be?")
   parser.add_argument('--config_file', type=str, default='config.json',
                       help="File with data that configures extraction")
+  parser.add_argument('--nqlike_output', type=str, default='nq_like.json',
+                      help="Where we write transformed questions")
 
   args = parser.parse_args()
   # Load dataset
@@ -1259,7 +1281,14 @@ if __name__ == "__main__":
 
   
   print("Loading answer type ... ")
-  answer_type_dict = pd.read_json(args.lat_freq, lines=True, orient='records').to_dict()
+  with open(args.lat_freq) as infile:
+    answer_type_dict = json.load(infile)
+  str_keys = list(answer_type_dict.keys())
+
+  # Convert the keys to ints
+  for ii in str_keys:
+    answer_type_dict[int(ii)] = answer_type_dict[ii]
+    del answer_type_dict[ii]
   print("done")
 
   # read contents from config.json file
@@ -1308,16 +1337,8 @@ if __name__ == "__main__":
         }
 
     transformed, qb_id_input = rewriter.transform_questions(qb_path, limit)
-    for key in transformed.keys():
-        # nqlike questions for a single QB sample
-        nqlist = transformed[key]
-        for i in range(len(nqlist)):
-            nq_like_df['qanta_id'].append(str(key))
-            nq_like_df['question'].append(nqlist[i]['nq_like_questions'])
-            if args.raw_text_output:
-                nq_like_df['orig_output_before_transformation'].append(nqlist[i]['orig_output_before_transformation'])
-    new_nqlike = pd.DataFrame(nq_like_df)
-    new_nqlike.to_json('./nq_like_questions.json', orient='index', indent=2)
+    with open(args.nqlike_output, 'w') as outfile:
+      json.dump(transformed, outfile, indent=2)
 
     # prepare NQlike and QB with contexts datasets for the classifier retraining QA
     qb_id_list = qb_id_input.tolist()
@@ -1336,8 +1357,8 @@ if __name__ == "__main__":
         answer_list.append(selected_qb_df.loc[selected_qb_df['qanta_id'] == idx]['answer'])
     # save nqlike_with_contexts
     #nqlike_list = new_nqlike.loc[new_nqlike.apply(lambda x: x.qanta_id in qb_id_list, axis=1)]['question'].tolist()
-    nqlike_list = new_nqlike['question'].tolist()
-    nqlike_with_contexts_df = pd.DataFrame(list(zip(qb_id_list, nqlike_list, context_list, char_spans_list, answer_list)),
-                                           columns =['qanta_id', 'question', 'context', 'char_spans', 'answer'])
-    nqlike_with_contexts_df['quality_score'] = 1
-    nqlike_with_contexts_df.to_json('./nqlike_with_contexts.json', lines=True, orient='records')
+    #nqlike_list = new_nqlike['question'].tolist()
+    #nqlike_with_contexts_df = pd.DataFrame(list(zip(qb_id_list, nqlike_list, context_list, char_spans_list, answer_list)),
+    #                                       columns =['qanta_id', 'question', 'context', 'char_spans', 'answer'])
+    #nqlike_with_contexts_df['quality_score'] = 1
+    #nqlike_with_contexts_df.to_json('./nqlike_with_contexts.json', lines=True, orient='records')

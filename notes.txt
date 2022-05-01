@@ -1,0 +1,11 @@
+
+
+- The download from Dropbox has more than it really should.  It's okay to have a target to get NQ and QB from *publicly accessible sources*, but all intermmediate results should be created within the code here, not downloaded.  requirements.txt should be in this repo.
+
+
+- Can we get stubs for the tests so that this doesn't have as many dependencies?
+
+
+- It seems odd to use spacy *and* NLTK for POS tagging.  Wouldn't this be cleaner to converge on a single set?
+
+- Why is "add_question_word_if_no_pronouns" not a heuristic transformation.  It sure seems like one, but it lives in a different part of the code base
