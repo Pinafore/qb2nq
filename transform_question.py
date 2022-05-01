@@ -94,7 +94,7 @@ class HeuristicsTransformer:
     return q
 
   # Heuristic 4 remove pattern issues
-  def remove_pattern(self, qb_id, q):
+  def remove_patterns(self, qb_id, q):
     """
     Remove bad patterns in NQlike
     """
@@ -415,27 +415,33 @@ class HeuristicsTransformer:
     tagged = nltk.pos_tag(text)    
     self.current_analysis = {"spacy": nlp(question), "nltk_tokens": tokens, "nltk_tags": tagged}
 
-    question = self.clean_answer_type(qb_id, question)
-    question = self.drop_after_semicolon(qb_id, question)
-    question = self.convert_continuous_to_present(qb_id, question)
-    question = self.no_wh_words(qb_id, question)
-    question = self.replace_this_is(qb_id, question)
-    question = self.replace_which_with_this(qb_id, question)
-    question = self.add_question_word(qb_id, question)
-    question = self.add_subject(qb_id, question)
-    question = self.which_none_is(qb_id, question)
-    question = self.what_is_which(qb_id, question)
-    question = self.remove_end_be_verbs(qb_id, question)
-    question = self.remove_extra_AUX(qb_id, question)
-    question = self.remove_pattern(qb_id, question)
-    question = self.remove_rep_subject(qb_id, question)
-    question = self.remove_BE_determiner(qb_id, question)
-    question = self.remove_repeat_verb(qb_id, question)
-    question = self.fix_no_verb(qb_id, question)
-    question = self.clean_marker(qb_id, question)
-    question = self.remove_name_which(qb_id, question)
-    question = self.add_space_before_punctuation(qb_id, question)
-      
+    for method_name in ["clean_answer_type",
+                        "drop_after_semicolon",
+                        "convert_continuous_to_present",
+                        "no_wh_words",
+                        "replace_this_is",
+                        "replace_which_with_this",
+                        "add_question_word",
+                        "add_subject",
+                        "which_none_is",
+                        "what_is_which",
+                        "remove_end_be_verbs",
+                        "remove_extra_AUX",
+                        "remove_patterns",
+                        "remove_rep_subject",
+                        "remove_BE_determiner",
+                        "remove_repeat_verb",
+                        "fix_no_verb",
+                        "clean_marker",
+                        "remove_name_which",
+                        "add_space_before_punctuation"]:
+      method = getattr(self, method_name)
+      try:
+        question = method(qb_id, question)
+      except Exception as exc:
+        print(traceback.format_exc())
+        print(exc)
+        
     self.current_analysis = None
     return question
 
