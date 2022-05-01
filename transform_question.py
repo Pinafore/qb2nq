@@ -457,139 +457,6 @@ class HeuristicsTransformer:
       q = result
     return q
 
-  def __call__(self, qb_id, question):
-    tokens = nltk.word_tokenize(question.lower())
-    text = nltk.Text(tokens)
-    tagged = nltk.pos_tag(text)    
-    self.current_analysis = {"spacy": nlp(question), "nltk_tokens": tokens, "nltk_tags": tagged}
-
-    for method_name in ["clean_answer_type",
-                        "drop_after_semicolon",
-                        "convert_continuous_to_present",
-                        "no_wh_words",
-                        "replace_this_is",
-                        "replace_which_with_this",
-                        "add_question_word",
-                        "add_subject",
-                        "which_none_is",
-                        "what_is_which",
-                        "remove_end_be_verbs",
-                        "remove_extra_AUX",
-                        "remove_patterns",
-                        "remove_rep_subject",
-                        "remove_BE_determiner",
-                        "remove_repeat_verb",
-                        "fix_no_verb",
-                        "clean_marker",
-                        "remove_name_which",
-                        "add_space_before_punctuation"]:
-      method = getattr(self, method_name)
-      try:
-        question = method(qb_id, question)
-      except Exception as exc:
-        print(traceback.format_exc())
-        print(exc)
-        
-    self.current_analysis = None
-    return question
-
-class AnswerTypeClassifier:
-
-    def __init__(self, last_sent_word_transform_30000, tokenizer, loaded_model):
-        self.last_sent_word_transform_30000 = last_sent_word_transform_30000
-        self.tokenizer = tokenizer
-        self.loaded_model = loaded_model
-
-    def get_answer_type_group(self, test_sentence):
-        predict_input = self.tokenizer.encode(test_sentence,
-                                      truncation=True,
-                                      padding=True,
-                                      return_tensors="tf")
-        tf_output = self.loaded_model.predict(predict_input)[0]
-        tf_prediction = tf.nn.softmax(tf_output, axis=1)
-        labels = ['NON_PERSON','PERSON']
-        label = tf.argmax(tf_prediction, axis=1)
-        label = label.numpy()
-        return labels[label[0]]
-
-    def answer_type_classifier_training(self):
-        # No need to rerun the answer type classifier to replicate results as we are providing checkpoints for the same
-        # the checkpoints are already provided in the corresponding folder
-    
-        #A PERSON:
-        #     replace 'he/she/who/him' and 'He/She/Who/Him' with 'which + answer_type + is/are'
-        #     replace 'his/whose/she's/he's' and 'His/Whose/She's/He's' with 'which + answer_type's'
-    
-        #A THING:
-        #     replace 'it/this/these' and 'It/This/These' with 'which + answer_type + is/are'
-        #     replace 'it's' and 'It's' with 'which + answer_type's'
-        person_list = []
-        label_list = []
-        for v in self.last_sent_word_transform_30000['who is the']:
-          person_list.append(v)
-          label_list.append('PERSON')
-    
-        non_person_list = []
-        for v in self.last_sent_word_transform_30000['which is the']:
-          non_person_list.append(v)
-          label_list.append('NON-PERSON')
-    
-        for v in self.last_sent_word_transform_30000['what is the']:
-          non_person_list.append(v)
-          label_list.append('NON-PERSON')
-    
-        my_answer_type_list = person_list+non_person_list
-        label_list = label_list[:len(my_answer_type_list)]
-        # convert lists to dataframe
-        zippedList =  list(zip(label_list, my_answer_type_list))
-        classification_df = pd.DataFrame(zippedList, columns=['label','answer_type'])
-    
-        LE = LabelEncoder()
-        classification_df['label'] = LE.fit_transform(classification_df['label'])
-        classification_df.head()
-    
-        groups = classification_df['answer_type'].values.tolist()
-        labels = classification_df['label'].tolist()
-    
-        training_sentences, validation_sentences, training_labels, validation_labels = train_test_split(groups, labels, test_size=.2)
-        tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
-        tokenizer([training_sentences[0]], truncation=True,
-                                    padding=True, max_length=128)
-        train_encodings = tokenizer(training_sentences,
-                                    truncation=True,
-                                    padding=True)
-        val_encodings = tokenizer(validation_sentences,
-                                    truncation=True,
-                                    padding=True)
-        train_dataset = tf.data.Dataset.from_tensor_slices((
-            dict(train_encodings),
-            training_labels
-        ))
-    
-        val_dataset = tf.data.Dataset.from_tensor_slices((
-            dict(val_encodings),
-            validation_labels
-        ))
-    
-        model = TFDistilBertForSequenceClassification.from_pretrained('distilbert-base-uncased',num_labels=2)
-        optimizer = tf.keras.optimizers.Adam(learning_rate=5e-5, epsilon=1e-08)
-        model.compile(optimizer=optimizer, loss=model.compute_loss, metrics=['accuracy'])
-        model.fit(train_dataset.shuffle(100).batch(16),
-                  epochs=3,
-                  batch_size=16,
-                  validation_data=val_dataset.shuffle(100).batch(16))
-    
-        #save the checkpoint
-        model.save_pretrained("./TriviaQuestion2NQ_Transform_Dataset/BERT_Classification/answer_type_classification_model/")
-
-
-# Main
-
-class QuestionRewriter:
-
-  def __init__(self, lat_frequency, min_length, to_trim, valid_verbs, remove_dict, non_last_sent_transform_dict,heuristicsTransformer, answerTypeClassifier):
-    self.lat_frequency = lat_frequency
-
   def preprocess_last_sent(self,q):
     # to make the last sentence start from the content after 'FTP's (name this/what)
     # merge the content before 'FTP's into previous sentence
@@ -842,7 +709,6 @@ class QuestionRewriter:
     q = self.remove_duplicates(q)
     q = q[0].lower()+q[1:]
     return q.strip()
-
   
   def __call__(self, qb_id, question, last_sentence):
     self.current_analysis = {}
@@ -900,6 +766,96 @@ class QuestionRewriter:
 
     self.current_analysis = None
     return applied_transformations
+
+class AnswerTypeClassifier:
+
+    def __init__(self, last_sent_word_transform_30000, tokenizer, loaded_model):
+        self.last_sent_word_transform_30000 = last_sent_word_transform_30000
+        self.tokenizer = tokenizer
+        self.loaded_model = loaded_model
+
+    def get_answer_type_group(self, test_sentence):
+        predict_input = self.tokenizer.encode(test_sentence,
+                                      truncation=True,
+                                      padding=True,
+                                      return_tensors="tf")
+        tf_output = self.loaded_model.predict(predict_input)[0]
+        tf_prediction = tf.nn.softmax(tf_output, axis=1)
+        labels = ['NON_PERSON','PERSON']
+        label = tf.argmax(tf_prediction, axis=1)
+        label = label.numpy()
+        return labels[label[0]]
+
+    def answer_type_classifier_training(self):
+        # No need to rerun the answer type classifier to replicate results as we are providing checkpoints for the same
+        # the checkpoints are already provided in the corresponding folder
+    
+        #A PERSON:
+        #     replace 'he/she/who/him' and 'He/She/Who/Him' with 'which + answer_type + is/are'
+        #     replace 'his/whose/she's/he's' and 'His/Whose/She's/He's' with 'which + answer_type's'
+    
+        #A THING:
+        #     replace 'it/this/these' and 'It/This/These' with 'which + answer_type + is/are'
+        #     replace 'it's' and 'It's' with 'which + answer_type's'
+        person_list = []
+        label_list = []
+        for v in self.last_sent_word_transform_30000['who is the']:
+          person_list.append(v)
+          label_list.append('PERSON')
+    
+        non_person_list = []
+        for v in self.last_sent_word_transform_30000['which is the']:
+          non_person_list.append(v)
+          label_list.append('NON-PERSON')
+    
+        for v in self.last_sent_word_transform_30000['what is the']:
+          non_person_list.append(v)
+          label_list.append('NON-PERSON')
+    
+        my_answer_type_list = person_list+non_person_list
+        label_list = label_list[:len(my_answer_type_list)]
+        # convert lists to dataframe
+        zippedList =  list(zip(label_list, my_answer_type_list))
+        classification_df = pd.DataFrame(zippedList, columns=['label','answer_type'])
+    
+        LE = LabelEncoder()
+        classification_df['label'] = LE.fit_transform(classification_df['label'])
+        classification_df.head()
+    
+        groups = classification_df['answer_type'].values.tolist()
+        labels = classification_df['label'].tolist()
+    
+        training_sentences, validation_sentences, training_labels, validation_labels = train_test_split(groups, labels, test_size=.2)
+        tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
+        tokenizer([training_sentences[0]], truncation=True,
+                                    padding=True, max_length=128)
+        train_encodings = tokenizer(training_sentences,
+                                    truncation=True,
+                                    padding=True)
+        val_encodings = tokenizer(validation_sentences,
+                                    truncation=True,
+                                    padding=True)
+        train_dataset = tf.data.Dataset.from_tensor_slices((
+            dict(train_encodings),
+            training_labels
+        ))
+    
+        val_dataset = tf.data.Dataset.from_tensor_slices((
+            dict(val_encodings),
+            validation_labels
+        ))
+    
+        model = TFDistilBertForSequenceClassification.from_pretrained('distilbert-base-uncased',num_labels=2)
+        optimizer = tf.keras.optimizers.Adam(learning_rate=5e-5, epsilon=1e-08)
+        model.compile(optimizer=optimizer, loss=model.compute_loss, metrics=['accuracy'])
+        model.fit(train_dataset.shuffle(100).batch(16),
+                  epochs=3,
+                  batch_size=16,
+                  validation_data=val_dataset.shuffle(100).batch(16))
+    
+        #save the checkpoint
+        model.save_pretrained("./TriviaQuestion2NQ_Transform_Dataset/BERT_Classification/answer_type_classification_model/")
+
 
 class AnswerTypeClassifier:
 
@@ -1260,7 +1216,7 @@ if __name__ == "__main__":
                       help="path of the qb dataset")
   parser.add_argument('--save_result', type=bool, default=True,
                       help="Save NQlike questions")
-  parser.add_argument('--lat_freq', type=str, default='lat_frequency.json',
+  parser.add_argument('--lat_freq', type=str, default='intermediate_results/lat_frequency.json',
                       help="JSON of frequency for each LAT")
   parser.add_argument('--answer_type_classifier', type=bool, default=False,
                       help="Retrain the answer type classifier from scratch")

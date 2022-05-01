@@ -82,5 +82,5 @@ if __name__ == "__main__":
   # load configuration 
   lat_freq_calculator = LatFrequencyComputer()
   lat_freq_calculator.compute_lat_frequency(orig_qb_path)
-  lat_freq_calculator.write_most_freq_answer_type_for_qid(orig_qb_path, 'lat_frequency.json')
+  lat_freq_calculator.write_most_freq_answer_type_for_qid(orig_qb_path, 'intermediate_results/lat_frequency.json')
 
