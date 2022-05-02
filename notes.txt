@@ -9,3 +9,6 @@
 - It seems odd to use spacy *and* NLTK for POS tagging.  Wouldn't this be cleaner to converge on a single set?
 
 - Why is "add_question_word_if_no_pronouns" not a heuristic transformation.  It sure seems like one, but it lives in a different part of the code base
+
+
+- It might be good to substitute non-answer pronouns so that if we extract spans they aren't ambiguous.  E.g., "she founded Carthage and reigned as its queen from 814-759 BC" becomes "she founded Carthage and reigned as Carthage's queen from 814-759 BC"
