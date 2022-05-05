@@ -6,30 +6,26 @@ import spacy
 # import neuralcoref
 from collections import Counter, defaultdict
 
+from question import Question
+
 nlp = spacy.load('en_core_web_sm')
 # neuralcoref.add_to_pipe(nlp)
 
 class LatFrequencyComputer:
-  def __init__(self):
+  def __init__(self, bad_tokens={"'s"}):
     self.page_frequency = defaultdict(Counter)
+    self.bad_tokens = bad_tokens
 
-  def count_answer_types(self, page: str, question: str, max_distance: int=4) -> Counter[str]:
-    analysis = nlp(question)
+  def count_answer_types(self, question, max_length=4) -> Counter[str]:
     lexical_answer_types = Counter()
     # Final all the 'this'
-    for this_idx in [idx for idx, token in enumerate(analysis) if token.text.lower() in ['this', 'these']]:
-      # Find the first noun after "this"'s index
-      try:
-        first_noun = min(x for x in range(this_idx, min(this_idx + max_distance, len(analysis))) if analysis[x].pos_ == 'NOUN')
-        next_non_noun = min(x for x in range(first_noun, min(first_noun + max_distance, len(analysis))) if analysis[x].pos_ != 'NOUN')
-        lat = analysis[this_idx+1:next_non_noun].text.strip()
-      except ValueError:
-        lat = ""
-      except IndexError:
-        lat = ""
-
-      self.page_frequency[page][lat] += 1
-      lexical_answer_types[lat] += 1
+    for span in question.answer_nominal_mentions():
+      span = list(span)
+      if len(span) >= max_length:
+        continue
+      mention = " ".join(x.text for x in span[1:] if x not in self.bad_tokens)
+      self.page_frequency[question.page][mention] += 1
+      lexical_answer_types[mention] += 1
 
     if len(lexical_answer_types) > 0:
       return lexical_answer_types.most_common()[0][0]
@@ -43,10 +39,11 @@ class LatFrequencyComputer:
       qb_data = json.load(f1)['questions']
 
       for i in range(len(qb_data)):
+        qid = qb_data[i]['qanta_id']
         page = qb_data[i]['page']
         text = qb_data[i]['text']
-        lats = self.count_answer_types(page, text)
-        if i%5000 == 0:
+        lats = self.count_answer_types(Question(qid, page, text))
+        if i % 500 == 0:
           print("===> %i/%i: %s %s" % (i, len(qb_data), page, str(lats)))
 
   def most_common(self, page: str) -> str:

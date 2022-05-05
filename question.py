@@ -9,17 +9,19 @@ class Question:
 
     def __init__(self, qanta_id, page, text,
                      exclude_pronouns={"her", "his", "their", "its"},
+                     triggers={'this', 'these', 'what'},
                      directive_verbs={"name", "identify", "give"}):
         self.qid = qanta_id
         self.page = page
         self.raw_text = text
         self.exclude_pronouns = exclude_pronouns
         self.directive_verbs = directive_verbs
+        self.triggers = triggers
 
         self.analysis = nlp(text)
 
     def answer_nominal_mentions(self):
-        for this_idx in [idx for idx, token in enumerate(self.analysis) if token.text.lower() in ['this', 'these', 'what']]:
+        for this_idx in [idx for idx, token in enumerate(self.analysis) if token.text.lower() in self.triggers]:
             for parent in self.analysis[this_idx].ancestors:
                 if self.analysis[parent.i].pos_ == "NOUN":
                     yield self.analysis[parent.i].subtree
