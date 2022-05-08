@@ -1,8 +1,10 @@
 import unittest
 import json
+
 from transformers import DistilBertTokenizerFast
 from transformers import TFDistilBertForSequenceClassification
-from transform_question import QuestionRewriter, HeuristicsTransformer, AnswerTypeClassifier
+from transform_question import QuestionRewriter, , AnswerTypeClassifier
+from heuristics import HeuristicsTransformer
 
 class TestQuestionTransformation(unittest.TestCase):
   def setUp(self):

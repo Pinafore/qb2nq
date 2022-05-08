@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import os
 import spacy
+import argparse
 # import neuralcoref
 from collections import Counter, defaultdict
 
@@ -23,7 +24,7 @@ class LatFrequencyComputer:
       span = list(span)
       if len(span) >= max_length:
         continue
-      mention = " ".join(x.text for x in span[1:] if x not in self.bad_tokens)
+      mention = " ".join(x.text for x in span[1:] if x.text not in self.bad_tokens)
       self.page_frequency[question.page][mention] += 1
       lexical_answer_types[mention] += 1
 
@@ -75,9 +76,15 @@ class LatFrequencyComputer:
       json.dump(page_to_most_freq_answer_type_dict, fp, indent=2)
 
 if __name__ == "__main__":
-  orig_qb_path = 'qanta.train.2018.04.18.json'
+  parser = argparse.ArgumentParser(description="Apply heuristic functions")
+  parser.add_argument('--limit', type=int,
+                      default=-1,help="Limit of number of QB questions input")
+  parser.add_argument('--qb_path', type=str,
+                      default='qanta.train.2021.12.20.json',
+                      help="path of the qb dataset")
+  
   # load configuration 
   lat_freq_calculator = LatFrequencyComputer()
-  lat_freq_calculator.compute_lat_frequency(orig_qb_path)
+  lat_freq_calculator.compute_lat_frequency(args.qb_path, limit=args.limit)
   lat_freq_calculator.write_most_freq_answer_type_for_qid(orig_qb_path, 'intermediate_results/lat_frequency.json')
 

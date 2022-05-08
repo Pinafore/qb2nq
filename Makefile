@@ -1,11 +1,21 @@
 
-
-prereqs: TriviaQuestion2NQ_Transform_Dataset qanta.train.2018.04.18.json neuralcoref
-	pip install -r "requirements.txt"; \
-	echo "Done"; \
+qbdataset = qanta.train.2021.12.20.json
 
 qanta.train.2018.04.18.json: 
 	wget https://s3-us-west-2.amazonaws.com/pinafore-us-west-2/qanta-jmlr-datasets/qanta.train.2018.04.18.json
+
+neuralcoref:
+	git clone https://github.com/huggingface/neuralcoref.git; \
+	cd neuralcoref; \
+	pip install -r requirements.txt; \
+	pip install -e .; \
+
+prereqs: $(qbdataset) neuralcoref
+	pip install -r "requirements.txt"; \
+	echo "Done"; \
+
+intermediate_results/lat_frequency.json: prereqs compute_lat_frequency.py $(qbdataset) 
+	python3 compute_lat_frequency.py --qb_path=$(qbdataset)
 
 TriviaQuestion2NQ_Transform_Dataset:
 	wget https://www.dropbox.com/sh/glitdogq6m573f9/AADOjUNbzGZ117UsHtr6K7m5a?dl=1; \
@@ -19,18 +29,10 @@ TriviaQuestion2NQ_Transform_Dataset:
 	rm -f AADOjUNbzGZ117UsHtr6K7m5a?dl=1; \
 	python3 -m nltk.downloader all; \
 
-neuralcoref:
-	git clone https://github.com/huggingface/neuralcoref.git; \
-	cd neuralcoref; \
-	pip install -r requirements.txt; \
-	pip install -e .; \
 
-intermediate_results/lat_frequency.json: compute_lat_frequency.py qanta.train.2018.04.18.json 
-	python3 compute_lat_frequency.py
 
-nq_like_questions.json: transform_question.py TriviaQuestion2NQ_Transform_Dataset neuralcoref
-	python3 transform_question.py; \
-	touch transform_question.py; \
+intermediate_results/nq_like.json: intermediate_results/lat_frequency.json
+	python3 transform_question.py
 
 logistic_regression_weight_dict_Qb_NQ.txt: quality_classifier.py TriviaQuestion2NQ_Transform_Dataset
 	python3 quality_classifier.py; \

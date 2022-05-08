@@ -12,3 +12,9 @@
 
 
 - It might be good to substitute non-answer pronouns so that if we extract spans they aren't ambiguous.  E.g., "she founded Carthage and reigned as its queen from 814-759 BC" becomes "she founded Carthage and reigned as Carthage's queen from 814-759 BC"
+
+
+
+Round 2:
+
+- Answer type classifier can probably happen with the LAT frequency analysis
