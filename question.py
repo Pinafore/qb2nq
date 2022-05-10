@@ -42,6 +42,10 @@ class Question:
                         if mention[0].text not in self.exclude_pronouns:
                             yield mention
 
+    def sentences(self):
+        for sent in self.analysis.sents:
+            yield [x.text for x in sent]
+                            
     def is_posessive(self, mention_tokens):
         if mention_tokens[-1].text == "'s" or mention_tokens[-1].text.lower() in {"his", "her", "their"}:
             return True

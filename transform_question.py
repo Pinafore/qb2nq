@@ -57,22 +57,16 @@ class QuestionRewriter:
     logging.debug("==============================")
     logging.debug("INITIAL CHUNKS| LAT: %s PRO: %s DET: %s" % (lexical_answer_type, pronoun, question_determiner))    
     chunks = [" ".join(x) for x in question.generate_chunks(lexical_answer_phrase, pronoun)]
+    chunks += [" ".join(x) for x in question.sentences()]
 
     tranformation_rows = []
 
-    for original in chunks:
-
-        transformations = self.heuristics(qb_id, original)
+    for chunk, original in enumerate(chunks):
+        transformations = self.heuristics(qb_id, chunk, original)
 
         for candidate in transformations:
-            row = {}
-            row['parent'] = transformations[candidate]["parent"]
-            row['transform'] = transformations[candidate]["transform"]
-            row['transform'] = transformations[candidate]['transform']            
-            row['nq_like_questions'] = candidate
-            row['orig_output_before_transformation'] = original
-            tranformation_rows.append(row)
-    return tranformation_rows
+            tranformation_rows.append(candidate)
+    return transformations
 
   def transform_questions(self, input_file, limit):
     with open(input_file) as infile:
@@ -82,11 +76,10 @@ class QuestionRewriter:
       else:
         questions = questions['questions']
 
-    transformed = defaultdict(list)        
+    transformed = []
     for row in questions:
-      print(row)
       question = Question(row['qanta_id'], row['page'], row['text'])
-      transformed[str(ii)] = self.single_question_transform(question)
+      transformed += self.single_question_transform(question)
 
     return transformed
     
@@ -143,12 +136,13 @@ if __name__ == "__main__":
 
   for ii in list(lat_frequency.keys()):
     lat_frequency[int(ii)] = lat_frequency[ii]
+  logging.info("Loaded %i LAT keys, e.g.: %s" % (len(lat_frequency), str(lat_frequency.keys())[:120]))
 
   # read contents from config.json file
   with open(args.config_file) as json_file:
     config = json.load(json_file)
 
-  transformer = HeuristicsTransformer(config)
+  transformer = HeuristicsTransformer(config, lat_frequency)
 
   rewriter = QuestionRewriter(lat_frequency,
                               min_length=args.min_chunk_length,
@@ -158,32 +152,23 @@ if __name__ == "__main__":
                               non_last_sent_transform_dict=config["non_last_sent_transform_dict"],
                               heuristics=transformer,
                               answer_classifier=AnswerType())
-
-  # save NQlike questions
-  if args.raw_text_output:
-    nq_like_df = {
-      'qanta_id':[],
-      'question':[],
-      'orig_output_before_transformation':[],
-    }
-
-
+  
   transformed = rewriter.transform_questions(qb_path, limit)
   with open(args.nqlike_output, 'w') as outfile:
       json.dump(transformed, outfile, indent=2)
 
-  # prepare NQlike and QB with contexts datasets for the classifier retraining QA
-  qb_id_list = qb_id_input.tolist()
-  qb_df = pd.read_json(qb_path, lines=True, orient='records')
-  selected_qb_df = qb_df.loc[qb_df.apply(lambda x: x.qanta_id in qb_id_list, axis=1)]
-  selected_qb_df = selected_qb_df.rename(columns={'score': 'quality_score'})
-  # save QB_with_contexts
-  selected_qb_df.to_json('./qb_with_contexts.json', orient='index', indent=2)
-  # mapping nq_like with contexts
-  context_list = []
-  char_spans_list = []
-  answer_list = []
-  for idx in qb_id_list:
-        context_list.append(selected_qb_df.loc[selected_qb_df['qanta_id'] == idx]['context'])
-        char_spans_list.append(selected_qb_df.loc[selected_qb_df['qanta_id'] == idx]['char_spans'])
-        answer_list.append(selected_qb_df.loc[selected_qb_df['qanta_id'] == idx]['answer'])
+  # # prepare NQlike and QB with contexts datasets for the classifier retraining QA
+  # qb_id_list = qb_id_input.tolist()
+  # qb_df = pd.read_json(qb_path, lines=True, orient='records')
+  # selected_qb_df = qb_df.loc[qb_df.apply(lambda x: x.qanta_id in qb_id_list, axis=1)]
+  # selected_qb_df = selected_qb_df.rename(columns={'score': 'quality_score'})
+  # # save QB_with_contexts
+  # selected_qb_df.to_json('./qb_with_contexts.json', orient='index', indent=2)
+  # # mapping nq_like with contexts
+  # context_list = []
+  # char_spans_list = []
+  # answer_list = []
+  # for idx in qb_id_list:
+  #       context_list.append(selected_qb_df.loc[selected_qb_df['qanta_id'] == idx]['context'])
+  #       char_spans_list.append(selected_qb_df.loc[selected_qb_df['qanta_id'] == idx]['char_spans'])
+  #       answer_list.append(selected_qb_df.loc[selected_qb_df['qanta_id'] == idx]['answer'])

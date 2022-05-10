@@ -1,6 +1,7 @@
 import logging
 import argparse
 import json
+from collections import Counter
 
 import traceback
 import re
@@ -27,7 +28,7 @@ def to_nltk_tree(node):
 
 # Heuristics for NQlike quality checking
 class HeuristicsTransformer:
-  def __init__(self, config):
+  def __init__(self, config, lat_lookup):
     self.current_analysis = {}    
     self.valid_verbs = config["valid_verbs"]
     self.wh_words = config["wh_words"]
@@ -38,7 +39,10 @@ class HeuristicsTransformer:
     self.bad_patterns = config["bad_patterns"]
     self.non_last_sent_transform_dict = config["non_last_sent_transform_dict"]
     self.remove_dict = config["remove_dict"]
+    self.answer_type_dict = lat_lookup
 
+    self.regexp_trims = [re.compile("[\W ]*$"), # Trailing punctation
+                           ]
   def add_question_word_if_no_pronouns(self, qb_id: int, question: str) -> Iterable[str]:
     # input: questions after the parse tree steps and before transformation
     q = question[0].lower()+question[1:]
@@ -104,8 +108,8 @@ class HeuristicsTransformer:
       		array_leng = array_leng - 1
       		has_heuristic = True
     	if has_heuristic:
-      		q = ' '.join(q_array)
-    yield q
+      		question = ' '.join(q_array)
+    yield question
 
   # Heuristic 2 -- name this answer type correction
   def clean_answer_type(self, qb_id: int, question: str) -> Iterable[str]:
@@ -116,10 +120,12 @@ class HeuristicsTransformer:
     if re.search(to_clean, question):
       start_with = "^-- name this"
       # if start with -- name this converts to which
-      if re.search(start_with, q):
-        q = re.sub(start_with, 'which', q)
+      if re.search(start_with, question):
+        q = re.sub(start_with, 'which', question)
       else:
-        q = re.sub(to_clean, 'the', q)
+        q = re.sub(to_clean, 'the', question)
+    else:
+      q = question
     yield q
 
   # Heuristic 3 semicolon
@@ -129,8 +135,8 @@ class HeuristicsTransformer:
     """
     to_clean = ";.*"
     if re.search(to_clean, question):
-      q = re.sub(to_clean, '', question)
-    yield q
+      question = re.sub(to_clean, '', question)
+    yield question
 
   # Heuristic 4 remove pattern issues
   def remove_patterns(self, qb_id: int, question: str) -> Iterable[str]:
@@ -191,28 +197,24 @@ class HeuristicsTransformer:
     q = ' '.join(tokens)
     yield q
 
-  # Heuristic 7 add be verb to questions without verb
-  def add_verb(self, qb_id: int, question: str) -> Iterable[str]:
-    """
-    add BE verb when there's no verb in the entire question
-    """
-    tokens = self.current_analysis[question]["nltk_tokens"]
-    tagged = self.current_analysis[question]["nltk_tags"]
-    ind = 0
-    for tk,tg in tagged:
-      if tg == 'NN' or tg == 'NNP':
-        tokens.insert(ind+1,'is')
-        break
-      elif tg == 'NNS' or tg == 'NNPS':
-        tokens.insert(ind+1,'are')
-        break
-      ind = ind + 1
-    yield ' '.join(tokens)
-
   def fix_no_verb(self, qb_id: int, question: str) -> Iterable[str]:
     if (self.count_num_of_verbs(question, True) == 0):
-      question = self.add_verb(question)
-    yield question
+      tokens = self.current_analysis[question]["nltk_tokens"]
+      tagged = self.current_analysis[question]["nltk_tags"]
+      ind = 0
+
+      for tk,tg in tagged:
+        if tg == 'NN' or tg == 'NNP':
+          tokens.insert(ind+1,'is')
+          break
+        elif tg == 'NNS' or tg == 'NNPS':
+          tokens.insert(ind+1,'are')
+          break
+        ind = ind + 1
+        
+      yield ' '.join(tokens)
+    else:
+      yield question
 
   # Heuristic 8 remove repetitive be verb when there's more verbs
   def remove_repeat_verb(self, qb_id: int, question: str) -> Iterable[str]:
@@ -271,18 +273,19 @@ class HeuristicsTransformer:
     wh_re = re.compile("|".join(wh_words))
     if not wh_re.search(question):
       # no wh_words
-      if qb_id in self.answer_type_dict and len(question) > 1:
+      if len(question) > 1 and qb_id in self.answer_type_dict:
           answer_type = self.answer_type_dict[qb_id] # get the answer type from qb_id
           # whether starting from VERB or not
           wn_list = wn.synsets(question.split()[0])
           if not wn_list==[]:
-              tag = wn.synsets(q.split()[0])[0].pos()
+              tag = wn.synsets(question.split()[0])[0].pos()
               if tag == 'v':
                   result = 'which '+answer_type+question
               else:
                   result = 'which '+answer_type+' is '+question
       else:
-          logging.warn("Missing answer type %i" % qb_id)
+          if not qb_id in self.answer_type_dict:
+              logging.warn("Missing answer type %i" % qb_id)
           result = re.sub('this', 'which', question, 1)
     yield result
 
@@ -371,6 +374,10 @@ class HeuristicsTransformer:
       question = result
     yield question
 
+  def rejoin_whose(self, qb_id: int, question: str) -> Iterable[str]:
+    if "who 's" in question:
+      yield question.replace("who 's", "whose")
+
   def split_conjunctions(self, qb_id: int, question: str) -> Iterable[str]:
     # First, find the verbs 
     parse = self.current_analysis[question]["spacy"]
@@ -382,7 +389,7 @@ class HeuristicsTransformer:
     verb_conj = set()
     for verb in verbs:
       for child in verb.children:
-        if child.dep_ == 'cc':
+        if child.dep_ == 'cc' and child.pos_ == "CCONJ":
           verb_conj.add((verb, child))
 
     if len(verb_conj) > 1:
@@ -457,17 +464,10 @@ class HeuristicsTransformer:
     """
 
     doc_dep = self.current_analysis[question]["spacy"]
-    pos_lst = []
-    tokem_text_lst = []
-    for k in range(len(doc_dep)):
-      pos_lst.append(doc_dep[k].pos_)
-      tokem_text_lst.append(doc_dep[k].text)
-    if pos_lst[0]=='AUX' or pos_lst[0]=='VERB':
-      # adding answer type at the beginning
-      qb_id = str(qb_id)
+
+    if len(doc_dep) > 1 and doc_dep[0].pos_ in {"AUX", "VERB"}:
       if qb_id in self.answer_type_dict:
-        answer_type = self.answer_type_dict[qb_id] # get the answer type from qb_id
-        question = 'which '+answer_type+' '+ q
+        yield "which %s %s" % (self.answer_type_dict[qb_id], question)
       else:
         logging.warn(qb_id+'is not in the frequency table!')
         
@@ -486,10 +486,10 @@ class HeuristicsTransformer:
       if qb_id in self.answer_type_dict.keys():
         answer_type = self.answer_type_dict[qb_id] # get the answer type from qb_id
         result = re.sub('which none is', 'which '+answer_type+' is', x)
-        q = result
+        question = result
       else:
         logging.warn(qb_id+'is not in the frequency table!')
-    yield q
+    yield question
 
   # Heuristic19: 'what is which' pattern
   def what_is_which(self, qb_id: int, question: str) -> Iterable[str]:
@@ -500,8 +500,8 @@ class HeuristicsTransformer:
     index = x.find('what is which')
     if index != -1:
       result = re.sub('what is which', 'which', x)
-      q = result
-    yield q
+      question = result
+    yield question
 
   def cache_analysis(self, question, verbose=False):
     """
@@ -519,49 +519,65 @@ class HeuristicsTransformer:
     self.current_analysis[question] = {"spacy": spacy_parse, "nltk_tokens": tokens, "nltk_tags": tagged}
 
     
-  def __call__(self, qb_id, question):
+  def __call__(self, qb_id, chunk_id, question, suppress_errors=False):
     self.current_analysis = {}
 
     active_set = set([question])
-    applied_transformations = defaultdict(dict)
+    applied_transformations = []
 
-    for method_name in ["remove_name_which",
-                        "clean_marker",
-                        "clean_answer_type",
-                        "drop_after_semicolon",
-                        "convert_continuous_to_present",
-                        "no_wh_words",
-                        "replace_this_is",
-                        "replace_which_with_this",
-                        "add_question_word",
-                        "add_subject",
-                        "which_none_is",
-                        "what_is_which",
-                        "remove_end_be_verbs",
-                        "remove_extra_AUX",
-                        "remove_patterns",
-                        "remove_rep_subject",
-                        "remove_BE_determiner",
-                        "fix_no_verb",
-                        "add_space_before_punctuation"]:
-      method = getattr(self, method_name)
+    while len(active_set) > len(self.current_analysis):
+      for qq in [x for x in active_set if x not in self.current_analysis]:
+        self.cache_analysis(qq)
+      
+        for method_name in ["split_conjunctions",
+                            "remove_name_which",
+                            "clean_marker",
+                            "clean_answer_type",
+                            "drop_after_semicolon",
+                            "convert_continuous_to_present",
+                            "no_wh_words",
+                            "replace_this_is",
+                            "replace_which_with_this",
+                            "add_question_word",
+                            "add_subject",
+                            "which_none_is",
+                            "what_is_which",
+                            "remove_end_be_verbs",
+                            "remove_extra_AUX",
+                            "remove_patterns",
+                            "remove_rep_subject",
+                            "remove_BE_determiner",
+                            "fix_no_verb",
+                            "add_space_before_punctuation",
+                            "rejoin_whose"]:
+          method = getattr(self, method_name)
 
-      while len(active_set) > len(self.current_analysis):
-        for qq in [x for x in active_set if x not in self.current_analysis]:
-          self.cache_analysis(question)
+          if suppress_errors:
+            try:
+              results = method(qb_id, qq)
+            except Exception as exc:
+              logging.error(traceback.format_exc())
+              logging.error(exc)
+              results = []
+              continue  
+          else:
+            results = method(qb_id, qq)
 
-          try:
-            for new_question in method(qb_id, qq):
+          for new_question in results:
               if new_question != qq:
-                logging.warn("Adding new question: " + str(new_question))
-                applied_transformations[new_question]["parent"] = qq
-                applied_transformations[new_question]["transform"] = method_name
+                logging.debug("Adding new question [%s]: %s" % (method_name, new_question))
+
+                row = {}
+                row["qanta_id"] = qb_id
+                row["original"] = question
+                row["parent"] = qq
+                row["chunk_id"] = chunk_id
+                row["result"] = new_question
+                row["transform"] = method_name
+                applied_transformations.append(row)
+                
                 active_set.add(new_question)
 
-          except Exception as exc:
-            logging.error(traceback.format_exc())
-            logging.error(exc)
-            continue
           
 
     self.current_analysis = None
@@ -582,15 +598,20 @@ if __name__ == "__main__":
   with open(args.config_file) as json_file:
     config = json.load(json_file)
   
-  heuristics = HeuristicsTransformer(config)
+  heuristics = HeuristicsTransformer(config, {0: "character", 94: "ruler", 102: "novel"})
   logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
   for qid, example in [(102, "An automobile in what novel was purchased in Fuller by Bessie for her marriage to 16-year - old Dude , and led to the death of both an African - American man and Grandmother Lester ."),
-                       (94, "He demanded compensation for the family of Jacob Kaiser and forced another group to end its alliance with Austria in an armistice that he negotiated to end a war in which no battles occurred.")]:
-      heuristics.cache_analysis(example, verbose=True)
-      for method_name, method in [("CONJ", heuristics.split_conjunctions)]:
-          for rewrite in method(qid, example):
-            print(method_name, example, rewrite)
-
+                       (94, "He demanded compensation for the family of Jacob Kaiser and forced another group to end its alliance with Austria in an armistice that he negotiated to end a war in which no battles occurred."),
+                       (0, ' what character is first encountered in the Spouter - Inn where the landlord thinks he may be late because " he ca n\'t sell his head , " and his coffin helps save the narrator after the ship he \'s on sinks . \xa0'),
+                       (19, "The protagonist of one of who 's works gives a jar to his friend instead of repaying a loan , and later dies after embezzling money in an attempt to buy out a courtesan 's contract .")]:
+      transformations = heuristics(qid, 0, example)
+      for transform in transformations:
+        logging.debug("===============================")
+        logging.debug(transform["original"])
+        logging.debug(transform["parent"])
+        logging.debug(transform["transform"])           
+        logging.debug(transform["result"])
+   
 
   

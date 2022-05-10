@@ -18,3 +18,10 @@
 Round 2:
 
 - Answer type classifier can probably happen with the LAT frequency analysis
+
+
+Round 3:
+
+replace dict and identify can probably be replaced with single regexp that has better coverage
+
+re.compile("[fF]or (ten|10) points [\S]* (name|identify|give) (this)?\s*")
