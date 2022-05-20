@@ -32,7 +32,7 @@ TriviaQuestion2NQ_Transform_Dataset:
 
 
 intermediate_results/nq_like.json: intermediate_results/lat_frequency.json
-	python3 transform_question.py
+	python3 transform_question.py --qb_path=$(qbdataset)
 
 logistic_regression_weight_dict_Qb_NQ.txt: quality_classifier.py TriviaQuestion2NQ_Transform_Dataset
 	python3 quality_classifier.py; \

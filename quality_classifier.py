@@ -46,27 +46,19 @@ def read_nq_like(location):
   with open(location) as infile:
     records = json.loads(infile.read())
     questions = pd.DataFrame.from_records(records)
+  questions['label'] = 1
+  questions['source'] = location
   return questions
 
+def build_dataset(nq, nq_like, limit, percent_test=0.25):
+  nq_like = read_nq_like(nq_like)
+  nq = pd.read_json(dataset_location, lines=True, orient='records')
+  nq['label'] = 0
+  nq['source'] = nq
 
-def build_dataset(nq, qb, nq_like, limit, percent_test=0.25):
-  merged = None
-  for label, dataset_location in [(1, nq), (0, nq_like)]:
-    print("Reading %s" % dataset_location)
-    fold = pd.read_json(dataset_location, lines=True, orient='records')
-    if dataset_location == nq_like:
-        fold = fold.rename(columns={"quality_score": 'score'})
-    if limit >= 0:
-      fold = fold.head(limit)
-
-    fold['tokenized'] = fold['question'].apply(lambda x: nltk.tokenize.sent_tokenize(x)[-1])
-    fold['label'] = label
-    fold['source'] = dataset_location
-
-    if not merged is None:
-      merged = pd.concat([merged, fold])
-    else:
-      merged = fold
+  merged = nq.concat([nq_like, nq])
+  
+  merged['tokenized'] = fold['question'].apply(lambda x: nltk.tokenize.sent_tokenize(x)[-1])
 
   train, test = sklearn.model_selection.train_test_split(merged, train_size=1.0-percent_test, random_state=42)
   print("Labels", train['label'])
@@ -76,7 +68,8 @@ def binarize(x):
     if x < 1:
         return 0
     else:
-        return 1 
+        return 1
+    
 # function to get number of nouns
 def count_num_nouns(text):
     tokens = nltk.word_tokenize(text.lower())

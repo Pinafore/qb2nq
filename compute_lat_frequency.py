@@ -33,7 +33,7 @@ class LatFrequencyComputer:
     else:
       return ""
 
-  def compute_lat_frequency(self, orig_qb_path: str) -> None:
+  def compute_lat_frequency(self, orig_qb_path: str, limit: int=-1) -> None:
     if os.path.exists(orig_qb_path) == False:
       print('Please check if {} exists in the current folder'.format(orig_qb_path))
     with open(orig_qb_path) as f1:
@@ -46,6 +46,8 @@ class LatFrequencyComputer:
         lats = self.count_answer_types(Question(qid, page, text))
         if i % 500 == 0:
           print("===> %i/%i: %s %s" % (i, len(qb_data), page, str(lats)))
+        if limit > 0 and i > limit:
+          break
 
   def most_common(self, page: str) -> str:
     """
@@ -61,10 +63,10 @@ class LatFrequencyComputer:
       print('Please check if {} exists in the current folder'.format(qanta_train_with_answer_type_path))
     qb_df = pd.read_json(qanta_train_with_answer_type_path, lines=True, orient='records')
 
-    if os.path.exists(orig_qb_path) == False:
+    if os.path.exists(qanta_train_with_answer_type_path) == False:
       print('Please check if {} exists in the current folder'.format(orig_qb_path))
       
-    with open(orig_qb_path) as f1:
+    with open(qanta_train_with_answer_type_path) as f1:
       page_to_most_freq_answer_type_dict = {}
       qb_data = json.load(f1)['questions']
 
@@ -82,9 +84,10 @@ if __name__ == "__main__":
   parser.add_argument('--qb_path', type=str,
                       default='qanta.train.2021.12.20.json',
                       help="path of the qb dataset")
+  args = parser.parse_args()
   
   # load configuration 
   lat_freq_calculator = LatFrequencyComputer()
   lat_freq_calculator.compute_lat_frequency(args.qb_path, limit=args.limit)
-  lat_freq_calculator.write_most_freq_answer_type_for_qid(orig_qb_path, 'intermediate_results/lat_frequency.json')
+  lat_freq_calculator.write_most_freq_answer_type_for_qid(args.qb_path, 'intermediate_results/lat_frequency.json')
 
