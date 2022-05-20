@@ -1,4 +1,5 @@
-import matplotlib.pyplot as plt
+import logging
+
 import nltk
 import numpy as np
 import pandas as pd
@@ -6,7 +7,7 @@ import re
 import json
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-import textstat
+# import textstat
 from sklearn.feature_extraction.text import CountVectorizer,TfidfVectorizer
 from math import log
 from sklearn.linear_model import LogisticRegression,LogisticRegressionCV
@@ -41,11 +42,16 @@ MAXFEATURES = 5000
 
 # Step 6: Functions to extract features
 
+def read_nq_like(location):
+  with open(location) as infile:
+    records = json.loads(infile.read())
+    questions = pd.DataFrame.from_records(records)
+  return questions
 
 
 def build_dataset(nq, qb, nq_like, limit, percent_test=0.25):
   merged = None
-  for label, dataset_location in [(1, nq), (0, qb), (0, nq_like)]:
+  for label, dataset_location in [(1, nq), (0, nq_like)]:
     print("Reading %s" % dataset_location)
     fold = pd.read_json(dataset_location, lines=True, orient='records')
     if dataset_location == nq_like:

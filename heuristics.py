@@ -36,14 +36,12 @@ class HeuristicsTransformer:
     self.to_trim = config["to_trim"]
     self.pos_pronouns = config["pos_pronouns"]
     self.pronouns = config["pronouns"]
-    self.bad_patterns = config["bad_patterns"]
+    self.imperative_pattern = {re.compile(x) for x in config["imperative"]}
+    self.regexp_trims = dict((re.compile(x), y) for x, y in config["remove_dict"].items())
     self.non_last_sent_transform_dict = config["non_last_sent_transform_dict"]
-    self.remove_dict = config["remove_dict"]
     self.answer_type_dict = lat_lookup
 
-    self.regexp_trims = [re.compile("[\W ]*$"), # Trailing punctation
-                           ]
-  def add_question_word_if_no_pronouns(self, qb_id: int, question: str) -> Iterable[str]:
+  def add_question_word_if_no_pronouns(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     # input: questions after the parse tree steps and before transformation
     q = question[0].lower()+question[1:]
 
@@ -88,66 +86,36 @@ class HeuristicsTransformer:
     yield q
     
   # Heuristic 1 remove punctuation patterns at the beginning and the end of the question [" ' ( ) , .]
-  def clean_marker(self, qb_id: int, question: str) -> Iterable[str]:
+  def remove_regexp_patterns(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     Remove punctuation patterns at the beginning and the end of the question
     """
-    to_clean = r"``|\"|\'|\(|\)|,|\.|\s"
-    has_heuristic = False
-    
-    q_array = self.current_analysis[question]["nltk_tokens"]
-    array_leng = len(q_array)
-    if array_leng > 1:
-    	while re.match(to_clean, q_array[array_leng-1]):
-      		q_array = q_array[:array_leng-1]
-      		array_leng = array_leng - 1
-      		has_heuristic = True
 
-    	while re.match(to_clean, q_array[0]):
-      		q_array = q_array[1:]
-      		array_leng = array_leng - 1
-      		has_heuristic = True
-    	if has_heuristic:
-      		question = ' '.join(q_array)
-    yield question
+    question = question
+    for pattern, replacement in self.regexp_trims.items():
+      question = pattern.sub(replacement, question)
+    yield question.strip()
 
   # Heuristic 2 -- name this answer type correction
-  def clean_answer_type(self, qb_id: int, question: str) -> Iterable[str]:
+  def imperative_to_question(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     Convert "-- name this" patterns to "which"
     """
-    to_clean = "-- name this"
-    if re.search(to_clean, question):
-      start_with = "^-- name this"
-      # if start with -- name this converts to which
-      if re.search(start_with, question):
-        q = re.sub(start_with, 'which', question)
-      else:
-        q = re.sub(to_clean, 'the', question)
-    else:
-      q = question
-    yield q
+    for pattern in self.imperative_pattern:
+      if pattern.search(question):
+        reduced = pattern.sub("", question).strip()
+        yield reduced
+        yield "%s is %s" % (question_determiner, reduced) 
 
   # Heuristic 3 semicolon
-  def drop_after_semicolon(self, qb_id: int, question: str) -> Iterable[str]:
+  def drop_after_semicolon(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     Remove contents after semicolon in NQlike
     """
     to_clean = ";.*"
     if re.search(to_clean, question):
       question = re.sub(to_clean, '', question)
-    yield question
-
-  # Heuristic 4 remove pattern issues
-  def remove_patterns(self, qb_id: int, question: str) -> Iterable[str]:
-    """
-    Remove bad patterns in NQlike
-    """
-    to_clean = self.bad_patterns
-    q = re.sub(to_clean, '', question)
-    yield q
-
-  
+    yield question  
   
   # Heuristic 5 remove repetition of the subject âis thisâ
   def count_num_of_verbs(self,text, strictly = False):
@@ -167,7 +135,7 @@ class HeuristicsTransformer:
       num_of_verb = num_of_verb + counted[v]
     return num_of_verb
 
-  def remove_rep_subject(self, qb_id: int, question: str) -> Iterable[str]:
+  def remove_rep_subject(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     remove is this... pattern
     """
@@ -179,7 +147,7 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic 6 change be determiner to s possession
-  def remove_BE_determiner(self, qb_id: int, question: str) -> Iterable[str]:
+  def remove_BE_determiner(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     change is his/is her/is its to 's
     """
@@ -189,7 +157,7 @@ class HeuristicsTransformer:
     yield question
 
   # function to add space before punctuation
-  def add_space_before_punctuation(self, qb_id: int, question: str) -> Iterable[str]:
+  def add_space_before_punctuation(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     add space before punctuation because in NQ there's space before all types of punctuation
     """
@@ -197,7 +165,7 @@ class HeuristicsTransformer:
     q = ' '.join(tokens)
     yield q
 
-  def fix_no_verb(self, qb_id: int, question: str) -> Iterable[str]:
+  def fix_no_verb(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     if (self.count_num_of_verbs(question, True) == 0):
       tokens = self.current_analysis[question]["nltk_tokens"]
       tagged = self.current_analysis[question]["nltk_tags"]
@@ -217,7 +185,7 @@ class HeuristicsTransformer:
       yield question
 
   # Heuristic 8 remove repetitive be verb when there's more verbs
-  def remove_repeat_verb(self, qb_id: int, question: str) -> Iterable[str]:
+  def remove_repeat_verb(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     remove is he/is she/is it
     """
@@ -228,7 +196,7 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic 9 First verb after which in continuous tense
-  def convert_continuous_to_present(self, qb_id: int, question: str) -> Iterable[str]:
+  def convert_continuous_to_present(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     if the first verb is in continuous tense, change it to nomal
     """
@@ -256,18 +224,8 @@ class HeuristicsTransformer:
       ind = ind + 1
     yield question
 
-  # Heuristic 10 fix "name which" "identify which"
-  def remove_name_which(self, qb_id: int, question: str) -> Iterable[str]:
-    """
-    remove name which/identify which
-    """
-    to_clean = "identify which|name which"
-    if re.search(to_clean, question):
-      question = re.sub(to_clean, 'which', question)
-    yield question
-
   # Heuristic11 convert this to which
-  def no_wh_words(self, qb_id: int, question: str) -> Iterable[str]:
+  def no_wh_words(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     result = question
     wh_words = self.wh_words
     wh_re = re.compile("|".join(wh_words))
@@ -290,7 +248,7 @@ class HeuristicsTransformer:
     yield result
 
   # Heuristic12
-  def replace_this_is(self, qb_id: int, question: str) -> Iterable[str]:
+  def replace_this_is(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     Replace 'this' to 'which'+answer_type within 'this is' pattern.
     """
@@ -310,7 +268,7 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic13: 'is/are' at the end of questions (after cleaning the wrong punc at the end of the sample)
-  def remove_end_be_verbs(self, qb_id: int, question: str) -> Iterable[str]:
+  def remove_end_be_verbs(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     Remove 'is/are' at the end of NQklike questions.
     """
@@ -325,7 +283,7 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic14: double auxiliary words
-  def remove_extra_AUX(self, qb_id: int, question: str) -> Iterable[str]:
+  def remove_extra_AUX(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     Remove extra auxiliary words.
     """
@@ -352,7 +310,7 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic15: WDT+BE patterns
-  def replace_which_with_this(self, qb_id: int, question: str) -> Iterable[str]:
+  def replace_which_with_this(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     Convert 'which' to 'that' and check if no 'which' present anymore, if so, convert 'this' to 'which'.
     """
@@ -374,11 +332,11 @@ class HeuristicsTransformer:
       question = result
     yield question
 
-  def rejoin_whose(self, qb_id: int, question: str) -> Iterable[str]:
+  def rejoin_whose(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     if "who 's" in question:
       yield question.replace("who 's", "whose")
 
-  def split_conjunctions(self, qb_id: int, question: str) -> Iterable[str]:
+  def split_conjunctions(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     # First, find the verbs 
     parse = self.current_analysis[question]["spacy"]
     
@@ -435,7 +393,7 @@ class HeuristicsTransformer:
   # Heuristic16: 
   # WDT tag: which/what
   # WRB tag: where/why/when
-  def add_question_word(self, qb_id: int, question: str) -> Iterable[str]:
+  def add_question_word(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     Adding 'which+answer_type' at the beginning when no WDT/WRB present.
     """
@@ -458,7 +416,7 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic17: VERB/AUX at the beginning of the sample while missing the object
-  def add_subject(self, qb_id: int, question: str) -> Iterable[str]:
+  def add_subject(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     Adding 'which+answer_type' at the beginning when starting with VERB/AUX and missing the subject.
     """
@@ -475,7 +433,7 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic18: 'which none is' patterns
-  def which_none_is(self, qb_id: int, question: str) -> Iterable[str]:
+  def which_none_is(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     Convert 'which none is' to 'what is'.
     """
@@ -492,7 +450,7 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic19: 'what is which' pattern
-  def what_is_which(self, qb_id: int, question: str) -> Iterable[str]:
+  def what_is_which(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     Remove "what is" from "what is which".
     """
@@ -519,7 +477,7 @@ class HeuristicsTransformer:
     self.current_analysis[question] = {"spacy": spacy_parse, "nltk_tokens": tokens, "nltk_tags": tagged}
 
     
-  def __call__(self, qb_id, chunk_id, question, suppress_errors=False):
+  def __call__(self, qb_id, chunk_id, question, lexical_answer_phrase, question_determiner, suppress_errors=False):
     self.current_analysis = {}
 
     active_set = set([question])
@@ -530,9 +488,8 @@ class HeuristicsTransformer:
         self.cache_analysis(qq)
       
         for method_name in ["split_conjunctions",
-                            "remove_name_which",
-                            "clean_marker",
-                            "clean_answer_type",
+                            "remove_regexp_patterns",
+                            "imperative_to_question",
                             "drop_after_semicolon",
                             "convert_continuous_to_present",
                             "no_wh_words",
@@ -544,7 +501,6 @@ class HeuristicsTransformer:
                             "what_is_which",
                             "remove_end_be_verbs",
                             "remove_extra_AUX",
-                            "remove_patterns",
                             "remove_rep_subject",
                             "remove_BE_determiner",
                             "fix_no_verb",
@@ -554,14 +510,14 @@ class HeuristicsTransformer:
 
           if suppress_errors:
             try:
-              results = method(qb_id, qq)
+              results = method(qb_id, qq, lexical_answer_phrase, question_determiner)
             except Exception as exc:
               logging.error(traceback.format_exc())
               logging.error(exc)
               results = []
               continue  
           else:
-            results = method(qb_id, qq)
+            results = method(qb_id, qq, lexical_answer_phrase, question_determiner)
 
           for new_question in results:
               if new_question != qq:
@@ -604,8 +560,9 @@ if __name__ == "__main__":
   for qid, example in [(102, "An automobile in what novel was purchased in Fuller by Bessie for her marriage to 16-year - old Dude , and led to the death of both an African - American man and Grandmother Lester ."),
                        (94, "He demanded compensation for the family of Jacob Kaiser and forced another group to end its alliance with Austria in an armistice that he negotiated to end a war in which no battles occurred."),
                        (0, ' what character is first encountered in the Spouter - Inn where the landlord thinks he may be late because " he ca n\'t sell his head , " and his coffin helps save the narrator after the ship he \'s on sinks . \xa0'),
-                       (19, "The protagonist of one of who 's works gives a jar to his friend instead of repaying a loan , and later dies after embezzling money in an attempt to buy out a courtesan 's contract .")]:
-      transformations = heuristics(qid, 0, example)
+                       (19, "The protagonist of one of who 's works gives a jar to his friend instead of repaying a loan , and later dies after embezzling money in an attempt to buy out a courtesan 's contract ."),
+                           (1, "'!$  % ##@# @@# ftp FTP ftp--- For 10 points, for 10 points , For 10 points --- for 20 points: for 10 points--this is a real, legit question !@#!@@#@%%%....?")]:
+      transformations = heuristics(qid, 0, example, "what thing", "what")
       for transform in transformations:
         logging.debug("===============================")
         logging.debug(transform["original"])
