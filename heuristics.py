@@ -103,9 +103,32 @@ class HeuristicsTransformer:
     """
     for pattern in self.imperative_pattern:
       if pattern.search(question):
-        reduced = pattern.sub("", question).strip()
-        yield reduced
-        yield "%s is %s" % (question_determiner, reduced) 
+        parse = self.current_analysis[question]["spacy"]
+        # find the mention, the first noun after identify, name, or give
+        verb_position = min(x.i for x in parse if x.text.lower() in ["name", "give", "identify"])
+        mention = parse[verb_position + 1].head
+        
+        # is there a relative clause or an appositive?
+        if 'relcl' in [x.dep_ for x in mention.children]:
+          # find the relative clause head
+          relative_head = [x for x in mention.children if x.dep_ == "relcl"]
+          if len(relative_head) > 1:
+            logging.warn("Two relative clauses for an 'identify' construction, and we don't know how to handle that")
+            return
+          relative_head = relative_head[0]
+          continuation = " ".join(x.text for x in parse[relative_head.left_edge.i+1:relative_head.right_edge.i+1])
+          yield "%s %s %s" % (question_determiner, lexical_answer_type, continuation)
+        elif parse[mention.i + 1].text == ',':
+          # If there is an appostive, then turn it into a question
+          continuation = " ".join(x.text for x in parse[(mention.i + 2):])
+          yield "%s is %s" % (lexical_answer_type, continuation)   
+        else:
+          # If not, just cut the "For 10 ... points [name/identify]" and yield that
+          reduced = pattern.sub("", question).strip()
+          yield reduced
+
+          # and the question version
+          yield "%s is the %s" % (question_determiner, reduced)
 
   # Heuristic 3 semicolon
   def drop_after_semicolon(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
@@ -412,7 +435,7 @@ class HeuristicsTransformer:
         result = 'which '+answer_type+' is '+x
         question = result
       else:
-        logging.warn(qb_id+'is not in the frequency table!')
+        logging.warn(str(qb_id) + 'is not in the frequency table!')
     yield question
 
   # Heuristic17: VERB/AUX at the beginning of the sample while missing the object
@@ -427,7 +450,7 @@ class HeuristicsTransformer:
       if qb_id in self.answer_type_dict:
         yield "which %s %s" % (self.answer_type_dict[qb_id], question)
       else:
-        logging.warn(qb_id+'is not in the frequency table!')
+        logging.warn(str(qb_id) + 'is not in the frequency table!')
         
     assert not question.startswith("which none is")
     yield question
@@ -488,8 +511,8 @@ class HeuristicsTransformer:
         self.cache_analysis(qq)
       
         for method_name in ["split_conjunctions",
+                            "imperative_to_question",                              
                             "remove_regexp_patterns",
-                            "imperative_to_question",
                             "drop_after_semicolon",
                             "convert_continuous_to_present",
                             "no_wh_words",
@@ -562,7 +585,13 @@ if __name__ == "__main__":
                        (0, ' what character is first encountered in the Spouter - Inn where the landlord thinks he may be late because " he ca n\'t sell his head , " and his coffin helps save the narrator after the ship he \'s on sinks . \xa0'),
                        (19, "The protagonist of one of who 's works gives a jar to his friend instead of repaying a loan , and later dies after embezzling money in an attempt to buy out a courtesan 's contract ."),
                            (1, "'!$  % ##@# @@# ftp FTP ftp--- For 10 points, for 10 points , For 10 points --- for 20 points: for 10 points--this is a real, legit question !@#!@@#@%%%....?"),
-                           (104, "For 10 points , name this organ , home to the islets of Langerhans .")]:
+                           (104, "For 10 points , name this organ , home to the islets of Langerhans ."),
+                           (8, "For 10 points , identify this French government that succeeded the Second Empire ."),
+                           (98, "For 10 points , identify this Sanskrit - language author of \" The Cloud Messenger \" and The Recognition of Shakuntala ."),
+                           (59, "For 10 points , name this mortal lover of Zeus and mother of Dionysus ."),
+                           (20, "For 10 points , name this Italian author of The Name of the Rose and Foucault 's Pendulum ."),
+                           (17, "For 10 points , name this country , the home of the director of The Seventh Seal , Ingmar Bergman .")]:
+
       transformations = heuristics(qid, 0, example, "what thing", "what")
       for transform in transformations:
         logging.debug("===============================")
