@@ -554,14 +554,15 @@ if __name__ == "__main__":
   with open(args.config_file) as json_file:
     config = json.load(json_file)
   
-  heuristics = HeuristicsTransformer(config, {0: "character", 94: "ruler", 102: "novel"})
+  heuristics = HeuristicsTransformer(config, {0: "character", 1: "thing", 94: "ruler", 102: "novel", 104: "organ"})
   logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
   for qid, example in [(102, "An automobile in what novel was purchased in Fuller by Bessie for her marriage to 16-year - old Dude , and led to the death of both an African - American man and Grandmother Lester ."),
                        (94, "He demanded compensation for the family of Jacob Kaiser and forced another group to end its alliance with Austria in an armistice that he negotiated to end a war in which no battles occurred."),
                        (0, ' what character is first encountered in the Spouter - Inn where the landlord thinks he may be late because " he ca n\'t sell his head , " and his coffin helps save the narrator after the ship he \'s on sinks . \xa0'),
                        (19, "The protagonist of one of who 's works gives a jar to his friend instead of repaying a loan , and later dies after embezzling money in an attempt to buy out a courtesan 's contract ."),
-                           (1, "'!$  % ##@# @@# ftp FTP ftp--- For 10 points, for 10 points , For 10 points --- for 20 points: for 10 points--this is a real, legit question !@#!@@#@%%%....?")]:
+                           (1, "'!$  % ##@# @@# ftp FTP ftp--- For 10 points, for 10 points , For 10 points --- for 20 points: for 10 points--this is a real, legit question !@#!@@#@%%%....?"),
+                           (104, "For 10 points , name this organ , home to the islets of Langerhans .")]:
       transformations = heuristics(qid, 0, example, "what thing", "what")
       for transform in transformations:
         logging.debug("===============================")
