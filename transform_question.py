@@ -54,11 +54,12 @@ class QuestionRewriter:
     lexical_answer_phrase = "%s %s" % (question_determiner, lexical_answer_type)
     
     # generate candidates from qb_question
-    logging.debug("==============================")
-    logging.debug("INITIAL CHUNKS| LAT: %s PRO: %s DET: %s" % (lexical_answer_type, pronoun, question_determiner))    
     chunks = [" ".join(x) for x in question.generate_chunks(lexical_answer_phrase, pronoun)]
     chunks += [" ".join(x) for x in question.sentences()]
+    logging.debug("==============================")
+    logging.debug("INITIAL %i CHUNKS| LAT: %s PRO: %s DET: %s" % (len(chunks), lexical_answer_type, pronoun, question_determiner))    
 
+    
     tranformation_rows = []
 
     for chunk, original in enumerate(chunks):
@@ -66,7 +67,7 @@ class QuestionRewriter:
 
         for candidate in transformations:
             tranformation_rows.append(candidate)
-    return transformations
+    return tranformation_rows
 
   def transform_questions(self, input_file, limit):
     with open(input_file) as infile:

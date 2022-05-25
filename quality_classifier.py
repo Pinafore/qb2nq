@@ -4,6 +4,7 @@ import nltk
 import numpy as np
 import pandas as pd
 import re
+from collections import defaultdict
 import json
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -18,12 +19,14 @@ from sklearn import tree
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics import accuracy_score
 from sklearn.neighbors import NearestNeighbors
+from scipy.sparse import coo_matrix
 from collections import Counter
 import pickle
 import warnings
 warnings.filterwarnings("ignore")
 import nltk
 import argparse
+from scipy.sparse import hstack
 
 
 # word2vec library
@@ -34,7 +37,7 @@ from gensim.test.utils import common_texts
 # w2v_model = gensim.downloader.load('glove-wiki-gigaword-300')
 
 # unigram initialization
-MAXFEATURES = 5000
+
 #unigram_converter = CountVectorizer(max_features=MAXFEATURES)
 
 
@@ -43,26 +46,37 @@ MAXFEATURES = 5000
 # Step 6: Functions to extract features
 
 def read_nq_like(location):
+  print("Reading NQ questions from %s" % location)
   with open(location) as infile:
     records = json.loads(infile.read())
     questions = pd.DataFrame.from_records(records)
   questions['label'] = 1
+  questions['question'] = questions['result']
   questions['source'] = location
   return questions
 
-def build_dataset(nq, nq_like, limit, percent_test=0.25):
-  nq_like = read_nq_like(nq_like)
-  nq = pd.read_json(dataset_location, lines=True, orient='records')
+def build_dataset(nq_location: str, nqlike_location:str, limit:int=-1, percent_test:float=0.25):
+  nq_like = read_nq_like(nqlike_location)
+  nq = pd.read_json(nq_location, lines=True, orient='records')
   nq['label'] = 0
-  nq['source'] = nq
+  nq['source'] = nq_location
 
-  merged = nq.concat([nq_like, nq])
+  print("=====NQ=====")
+  print(nq.head())
+  print("=====NQ Like=====")
+  print(nq_like.head())
+
+  if limit > 0:
+    fold_size = min(limit, nq.shape[0], nq_like.shape[0])
+  else:
+    fold_size = min(nq.shape[0], nq_like.shape[0])
+  print("Balanching to have %i questions" % fold_size)
+    
+  merged = pd.concat([nq_like.sample(fold_size), nq.sample(fold_size)], axis=0, ignore_index=True)
   
-  merged['tokenized'] = fold['question'].apply(lambda x: nltk.tokenize.sent_tokenize(x)[-1])
-
   train, test = sklearn.model_selection.train_test_split(merged, train_size=1.0-percent_test, random_state=42)
-  print("Labels", train['label'])
-  return train, test
+
+  return train, test, nq_like
 
 def binarize(x):
     if x < 1:
@@ -80,13 +94,8 @@ def count_num_nouns(text):
     return noun_num
 
 def count_duplicates(x):
-      x_list = x.lower().split(' ')
-      counter = Counter(x_list)
-      i = 0
-      for e in counter:
-        if counter[e] > 1:
-            i = i+1
-      return i
+      counter = Counter(x_list.lower().split())
+      return sum(1 for x in counter if counter[x] > 1)
 
 # function to get number of verbs
 def count_num_verbs(text):
@@ -154,20 +163,30 @@ class Word2Vec:
   
     
 class Classifier:
-  def __init__(self, feature_list, abnormal_length=5, w2v=Word2Vec(), data_length = MAXFEATURES):
+  def __init__(self, feature_list, abnormal_length=5, w2v=Word2Vec(), max_term_features = 20):
     self._length_cutoff = abnormal_length
     self._features = feature_list
+    self.feature_names = []
     self.w2v = w2v
-    self.max_features = data_length
-    self.unigram_converter = CountVectorizer(max_features=data_length)
-    self.train_dict = None
+    self.tokenizer = CountVectorizer(analyzer='word', ngram_range=(2, 2), max_features=max_term_features)
 
+  def initialize_tokenizer(self, train_set):
+    self.tokenizer.fit(train_set['question'])
+    
+  def get_bigrams(self, df_train):
+    return self.tokenizer.transform(df_train['question'])
+    
   def get_ablength(self, df_train):
-    return df_train['tokenized'].apply(lambda x: len(x.split()) < self._length_cutoff).values
+    values = df_train['question'].apply(lambda x: len(x.split()) < self._length_cutoff).values
+    values = values.reshape([len(values), 1])
+    return values
     
   # function to compute length feature
   def get_length(self, df_train):
-    return df_train['tokenized'].apply(lambda x: log(1 + len(x.split()))).values
+    values = df_train['question'].apply(lambda x: log(1 + len(x.split()))).values
+    num_rows = len(values)
+    values = values.reshape([num_rows, 1])
+    return coo_matrix(values, shape=[num_rows, 1])
 
   #function to compute kincaid readability score
   def get_kincaid(self, df_train):
@@ -175,7 +194,9 @@ class Classifier:
 
   # function to compute duplicate feature
   def get_duplicates(self, df_train):    
-    return df_train['question'].apply(count_duplicates).values
+    values = df_train['question'].apply(count_duplicates).values
+    values = values.reshape([len(values), 1])
+    return values
 
   # function to compute kincaid readability score
   def get_kincaid(self, df_train):
@@ -204,27 +225,30 @@ class Classifier:
   def get_word2vec(self, df_train):
     return df_train['question'].apply(self.w2v.vectorize).values
 
-  def get_unigram(self, df_train):
-    umatrix = []
-    if len(df_train) < self.max_features:
-      umatrix = self.unigram_converter.transform(df_train['tokenized'])
+  def feature_name(self, feature):
+    if feature == "bigrams":
+      lookup = self.tokenizer.vocabulary_
+      lookup = sorted((y, x) for x, y in lookup.items())
+      lookup = [y for x, y in lookup]
+      
+      return lookup
     else:
-      umatrix = self.unigram_converter.fit_transform(df_train['tokenized'])
-    unigram_list = self.unigram_converter.inverse_transform(umatrix)
-    return unigram_list
+      return [feature]
 
   def prepare_features(self, df):
-    feature_dictionary = {}
-    print("Test data", df)
-    y_train = df['score'].values
-    # function transform the training data to train
-    feature_dictionary['label'] =  y_train    
+    self.feature_names = []
+    features = []
 
     for ii in self._features:
+      logging.info("Building feature %s" % ii)
       method = getattr(self, "get_" + ii)
-      feature_dictionary[ii] = method(df)
+      names = self.feature_name(ii)
+      for ii in names:
+        self.feature_names.append(ii)
+      features.append(method(df))
 
-    return feature_dictionary
+    print(features)
+    return hstack(features)
 
   # helper function to prepare data for classifier
   def get_x_vals(self, dictionary):
@@ -251,25 +275,22 @@ class Classifier:
 
   # function to train classifier    
   def train_classifier(self, train):
-    self.train_dict = c.prepare_features(train)
     y_train = train['label'].values
-    
-    print("Training classifer with features: %s" % str(' '.join(self.train_dict.keys())))
     print("YVALS")
     print(y_train)
-    x_train = self.get_x_vals(self.train_dict) 
+    print("XVALS")
+    x_train = self.prepare_features(train)
+    print(x_train)
     model = LogisticRegression().fit(x_train,y_train)
     return model
 
   # function to evaluate classifier
   def evaluate(self, model, df_test):
-    test_dict = self.prepare_features(df_test)
-    
-    x = self.get_x_vals(test_dict)
+    x = self.prepare_features(df_test)
     results = model.predict_proba(x)
-    test_dict['prob_scores'] = results[:, 1]
+    df_test['prob_scores'] = results[:, 1]
     predictions = model.predict(x)
-    test_dict['pred'] = predictions
+    df_test['pred'] = predictions
     
     # TODO: Compute precision and recall
     #
@@ -281,39 +302,41 @@ class Classifier:
     
     acc = accuracy_score(predictions, df_test['label'])
     print('Accuracy: '+format(acc)+'\n')
-    return test_dict
+    return df_test
 
   def generate_feature_weight(self, model):
     feature_weight = {}
-    weights = model.coef_[0]
-    names = list(self.train_dict.keys())
-    #assert len(weights) == (len(self._features)), "Unexpected feature length %i vs %i" % (len(self._features) + 1, len(weights))
-    for i in range(0,len(names)-1):
-      if names[i+1] == 'word2vec':
-        feature_weight[names[i+1]] = weights[i:i+300].tolist()
-      elif names[i+1] == 'unigram':
-        if 'word2vec' in names:
-          feature_weight[names[i+1]] = weights[i+300:].tolist()
-        else: 
-          feature_weight[names[i+1]] = weights[i:].tolist() 
-      else:
-        feature_weight[names[i+1]] =[weights[i]] 
+
+    assert len(self.feature_names) == len(model.coef_[0]), "Names do not match feature dimension (%i vs %i)" % (len(self.feature_names), len(model.coef_[0]))
+    for name, weight in zip(self.feature_names, model.coef_[0]):
+      feature_weight[name] = weight
+
     feature_weight["BIAS"] = model.intercept_[0]
     return feature_weight
 
-  def save_dictionary(self, questions, dict_data, file_path):   
+  def save_dictionary(self, questions, file_path):   
+    x = self.prepare_features(questions)
+    results = model.predict_proba(x)
 
-    len_of_data = len(questions)
-    dict_to_write = {}
-    dict_to_write['questions'] = list(questions['tokenized'])
-    for col in self._features:
-      dict_to_write[col] = dict_data[col]
+    questions['score'] = results[:, 1]
 
-    dict_to_write['label'] = [binarize(x) for x in dict_data['label']]
-    dict_to_write['pred'] = dict_data['pred']
-    dict_to_write['source'] = list(questions['source'])
-    dict_to_write['good'] = [x > 0 and 'nq_like' in y for x, y in zip(dict_to_write['pred'], dict_to_write['source'])]
-    dict_to_write['prob_scores'] = dict_data['prob_scores'] 
+    dict_to_write = defaultdict(list)
+
+    question_ids = set(questions['qanta_id'])
+    for qq in question_ids:
+      chunks = set(nq_like[nq_like.qanta_id == qq].chunk_id)
+      for chunk in chunks:
+        # Find the highest scoring prediction, take that as answer
+        subview = questions[(questions.qanta_id == qq) & (questions.chunk_id == chunk)]
+        best_score = min(subview.score)
+
+        for row_id, row in subview[subview.score == best_score].iterrows():
+          dict_to_write['qanta_id'].append(row.qanta_id)
+          dict_to_write['score'].append(row.score)          
+          dict_to_write['question'].append(row.question)
+          dict_to_write['original'].append(row.original)
+          dict_to_write['chunk_id'].append(row.chunk_id)
+          break
     
     df = pd.DataFrame(data=dict_to_write)
     df.to_csv(file_path)
@@ -327,49 +350,37 @@ class Classifier:
 # qb_last = True: only consider the last sentence of the qb questions
 # qb_last = False: consider the whole qb questions
 if __name__=="__main__":
-
+  logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
   parser = argparse.ArgumentParser(description="Create classifier to discriminate synthetic questions from real questions")
   parser.add_argument('--limit', type=int, default=20)
-  parser.add_argument('-f', '--feature_list', nargs='+', default=['length', 'ablength'])
-  parser.add_argument('--test_predictions', type=str, default='test_feature_dict_QB_NQ.csv')
-  parser.add_argument('--nq_data', type=str, default='./TriviaQuestion2NQ_Transform_Dataset/NaturalQuestions_train_reformatted.json')
-  parser.add_argument('--qb_data', type=str, default='./TriviaQuestion2NQ_Transform_Dataset/qb_train_with_contexts_lower_nopunc_debug_Feb24.json')
-  parser.add_argument('--nqlike_data', type=str, default='./TriviaQuestion2NQ_Transform_Dataset/nq_like_questions_train_with_orig_quality_scores_with_contexts_Mar10_data_cleaned.json')  
-  parser.add_argument('--features', type=str, default='')
+  parser.add_argument('-f', '--feature_list', nargs='+', default=['length', 'ablength', 'bigrams'])
+  parser.add_argument('--predictions', type=str, default='intermediate_results/nqlike_scores.csv')
+  parser.add_argument('--nq_data', type=str, default='TriviaQuestion2NQ_Transform_Dataset/NaturalQuestions_train_reformatted_Feb24.json')
+  parser.add_argument('--nqlike_data', type=str, default='intermediate_results/nq_like.json')  
+  parser.add_argument('--max_term_features', type=int, default=50)
   args = parser.parse_args()
 	# set flag and if_qb_last_sent here
 	# 0 --wellformedness accuracy output
 	# 1 --NQ-like output
 
-  train, test = build_dataset(args.nq_data, args.qb_data, args.nqlike_data, args.limit)
-  unigram_len = min([len(train), MAXFEATURES])
-  c = Classifier(args.feature_list, data_length=unigram_len)
+    
+  train, test, nq_like = build_dataset(args.nq_data, args.nqlike_data, args.max_term_features)
 
+  c = Classifier(args.feature_list, max_term_features=args.max_term_features)
+  c.initialize_tokenizer(train)
+  
+  # TODO: Would be good to do cross-fold validation for the NQ like predictions
 
   # Train model and output the weights
   model = c.train_classifier(train)
   weight_dict = c.generate_feature_weight(model)
   print("Weight dict", weight_dict)
-  with open('logistic_regression_weight_dict_Qb_NQ.txt', 'w') as f:
+  with open('intermediate_results/logistic_regression_weight_dict_QB_NQ.txt', 'w') as f:
     f.write(json.dumps(weight_dict))
   
   # save feature weight  
-  if args.test_predictions:
+  if args.predictions:
 		# test
     print('QB NQ Test ')
-    test_dict = c.evaluate(model, test)
-    c.save_dictionary(test, test_dict, args.test_predictions)
+    c.save_dictionary(nq_like, args.predictions)
     
-  if args.features:
-		# predict nq score for nq-like question
-		# transform data
-    df_nqlike = pd.read_json(args.nqlike_data, lines=True)
-    df_nqlike = df_nqlike[['qanta_id', 'question', 'quality_score']].copy()
-    df_nqlike = df_nqlike.rename(columns={"quality_score": 'score'})
-		# sample 5% of all questions as dataset too large
-    df_nqlike = df_nqlike.sample(frac=0.05, replace=False).reset_index()
-    nqlike_feature_dict = c.prepare_features(df_nqlike)
-		# predicting and store results
-    print('NQ-Like ')
-    eval_nqlike = c.evaluate(model, df_nqlike, True)
-    c.save_dictionary(df_nqlike['question'],  eval_nqlike, args.features)
