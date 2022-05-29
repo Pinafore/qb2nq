@@ -290,21 +290,6 @@ class HeuristicsTransformer:
         question = result
     yield question
 
-  # Heuristic13: 'is/are' at the end of questions (after cleaning the wrong punc at the end of the sample)
-  def remove_end_be_verbs(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
-    """
-    Remove 'is/are' at the end of NQklike questions.
-    """
-    x = question
-    x = x.strip()
-    if x[-3:] == ' is':
-      result = x[:-3]
-      question = result
-    elif x[-4:] == ' are':
-      result = x[:-4]
-      question = result
-    yield question
-
   # Heuristic14: double auxiliary words
   def remove_extra_AUX(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
@@ -510,25 +495,24 @@ class HeuristicsTransformer:
       for qq in [x for x in active_set if x not in self.current_analysis]:
         self.cache_analysis(qq)
       
-        for method_name in ["split_conjunctions",
-                            "imperative_to_question",                              
-                            "remove_regexp_patterns",
-                            "drop_after_semicolon",
-                            "convert_continuous_to_present",
-                            "no_wh_words",
-                            "replace_this_is",
-                            "replace_which_with_this",
-                            "add_question_word",
-                            "add_subject",
-                            "which_none_is",
-                            "what_is_which",
-                            "remove_end_be_verbs",
-                            "remove_extra_AUX",
-                            "remove_rep_subject",
-                            "remove_BE_determiner",
-                            "fix_no_verb",
-                            "add_space_before_punctuation",
-                            "rejoin_whose"]:
+        for method_name, replace in [("split_conjunctions", False),
+                                     ("imperative_to_question", True),                              
+                                     ("remove_regexp_patterns", True),
+                                     ("drop_after_semicolon", False),
+                                     ("convert_continuous_to_present", False),
+                                     ("no_wh_words", False),
+                                     ("replace_this_is", False),
+                                     ("replace_which_with_this", False),
+                                     # "add_question_word",
+                                     # "add_subject",
+                                     ("which_none_is", False),
+                                     ("what_is_which", True),
+                                     # "remove_extra_AUX",
+                                     ("remove_rep_subject", True),
+                                     ("remove_BE_determiner", True),
+                            # "fix_no_verb",
+                                     ("add_space_before_punctuation", True),
+                                     ("rejoin_whose", True)]:
           method = getattr(self, method_name)
 
           if suppress_errors:
@@ -556,6 +540,9 @@ class HeuristicsTransformer:
                 applied_transformations.append(row)
                 
                 active_set.add(new_question)
+
+          if replace:
+            break
 
           
 
