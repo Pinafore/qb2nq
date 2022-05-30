@@ -63,7 +63,7 @@ class QuestionRewriter:
     tranformation_rows = []
 
     for chunk, original in enumerate(chunks):
-        transformations = self.heuristics(qb_id, chunk, original, lexical_answer_phrase, question_determiner)
+        transformations = self.heuristics(qb_id, question.page, chunk, original, lexical_answer_phrase, question_determiner)
 
         for candidate in transformations:
             tranformation_rows.append(candidate)

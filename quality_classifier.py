@@ -51,7 +51,6 @@ def read_nq_like(location):
     records = json.loads(infile.read())
     questions = pd.DataFrame.from_records(records)
   questions['label'] = 1
-  questions['question'] = questions['result']
   questions['source'] = location
   return questions
 
@@ -73,6 +72,8 @@ def build_dataset(nq_location: str, nqlike_location:str, limit:int=-1, percent_t
   print("Balanching to have %i questions" % fold_size)
     
   merged = pd.concat([nq_like.sample(fold_size), nq.sample(fold_size)], axis=0, ignore_index=True)
+  merged['bigram'] = merged['question'].apply(lambda x: "START %s STOP" % x)
+  nq_like['bigram'] = nq_like['question'].apply(lambda x: "START %s STOP" % x)
   
   train, test = sklearn.model_selection.train_test_split(merged, train_size=1.0-percent_test, random_state=42)
 
@@ -163,18 +164,18 @@ class Word2Vec:
   
     
 class Classifier:
-  def __init__(self, feature_list, abnormal_length=5, w2v=Word2Vec(), max_term_features = 20):
+  def __init__(self, feature_list, abnormal_length=4, w2v=Word2Vec(), max_term_features = 20):
     self._length_cutoff = abnormal_length
     self._features = feature_list
     self.feature_names = []
     self.w2v = w2v
-    self.tokenizer = CountVectorizer(analyzer='word', ngram_range=(2, 2), max_features=max_term_features)
+    self.tokenizer = CountVectorizer(analyzer='word', ngram_range=(2, 2), max_features=max_term_features, lowercase=False)
 
   def initialize_tokenizer(self, train_set):
-    self.tokenizer.fit(train_set['question'])
+    self.tokenizer.fit(train_set['bigram'])
     
   def get_bigrams(self, df_train):
-    return self.tokenizer.transform(df_train['question'])
+    return self.tokenizer.transform(df_train['bigram'])
     
   def get_ablength(self, df_train):
     values = df_train['question'].apply(lambda x: len(x.split()) < self._length_cutoff).values
@@ -247,7 +248,6 @@ class Classifier:
         self.feature_names.append(ii)
       features.append(method(df))
 
-    print(features)
     return hstack(features)
 
   # helper function to prepare data for classifier
@@ -270,17 +270,12 @@ class Classifier:
           new_x_vals.append(np.concatenate((x_vals[i],all_vectors[i])))
         x_vals = new_x_vals
     x_vals = np.delete(x_vals, 0, 1)
-    print("XVALS", x_vals)
     return x_vals
 
   # function to train classifier    
   def train_classifier(self, train):
     y_train = train['label'].values
-    print("YVALS")
-    print(y_train)
-    print("XVALS")
     x_train = self.prepare_features(train)
-    print(x_train)
     model = LogisticRegression().fit(x_train,y_train)
     return model
 
@@ -297,11 +292,8 @@ class Classifier:
     # of the things that we say are NQ, how many actually are?
     # of the NQ questions, how many did we find?
 
-    print("PRED", predictions)
-    print("LAB", df_test['label'])
-    
     acc = accuracy_score(predictions, df_test['label'])
-    print('Accuracy: '+format(acc)+'\n')
+    logging.info('Accuracy: '+format(acc)+'\n')
     return df_test
 
   def generate_feature_weight(self, model):
@@ -374,7 +366,7 @@ if __name__=="__main__":
   # Train model and output the weights
   model = c.train_classifier(train)
   weight_dict = c.generate_feature_weight(model)
-  print("Weight dict", weight_dict)
+  logging.info("Weight dict", weight_dict)
   with open('intermediate_results/logistic_regression_weight_dict_QB_NQ.txt', 'w') as f:
     f.write(json.dumps(weight_dict))
   

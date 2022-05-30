@@ -94,7 +94,7 @@ class HeuristicsTransformer:
     question = question
     for pattern, replacement in self.regexp_trims.items():
       question = pattern.sub(replacement, question)
-    yield question.strip()
+    yield question.replace("  ", "").strip()
 
   # Heuristic 2 -- name this answer type correction
   def imperative_to_question(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
@@ -118,7 +118,7 @@ class HeuristicsTransformer:
           relative_head = relative_head[0]
           continuation = " ".join(x.text for x in parse[relative_head.left_edge.i+1:relative_head.right_edge.i+1])
           yield "%s %s %s" % (question_determiner, lexical_answer_type, continuation)
-        elif parse[mention.i + 1].text == ',':
+        elif len(parse) > mention.i + 1 and parse[mention.i + 1].text == ',':
           # If there is an appostive, then turn it into a question
           continuation = " ".join(x.text for x in parse[(mention.i + 2):])
           yield "%s is %s" % (lexical_answer_type, continuation)   
@@ -131,14 +131,15 @@ class HeuristicsTransformer:
           yield "%s is the %s" % (question_determiner, reduced)
 
   # Heuristic 3 semicolon
-  def drop_after_semicolon(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def drop_after_punctuation(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     """
     Remove contents after semicolon in NQlike
     """
-    to_clean = ";.*"
-    if re.search(to_clean, question):
-      question = re.sub(to_clean, '', question)
-    yield question  
+    for pattern in [re.compile("[;,!?.].*$"), re.compile("^[;,!?.].*")]:
+      if pattern.search(question):
+        question = pattern.sub('', question)
+        yield question
+    
   
   # Heuristic 5 remove repetition of the subject âis thisâ
   def count_num_of_verbs(self,text, strictly = False):
@@ -485,20 +486,20 @@ class HeuristicsTransformer:
     self.current_analysis[question] = {"spacy": spacy_parse, "nltk_tokens": tokens, "nltk_tags": tagged}
 
     
-  def __call__(self, qb_id, chunk_id, question, lexical_answer_phrase, question_determiner, suppress_errors=False):
+  def __call__(self, qb_id, answer, chunk_id, question, lexical_answer_phrase, question_determiner, suppress_errors=False):
     self.current_analysis = {}
-
-    active_set = set([question])
+    finished = set()
     applied_transformations = []
+    self.cache_analysis(question)
 
-    while len(active_set) > len(self.current_analysis):
-      for qq in [x for x in active_set if x not in self.current_analysis]:
-        self.cache_analysis(qq)
-      
+    while len(finished) < len(self.current_analysis):
+      unchecked = [x for x in self.current_analysis if x not in finished]
+      for qq in unchecked:
+        assert not qq in finished
         for method_name, replace in [("split_conjunctions", False),
                                      ("imperative_to_question", True),                              
-                                     ("remove_regexp_patterns", True),
-                                     ("drop_after_semicolon", False),
+                                     ("remove_regexp_patterns", False),
+                                     ("drop_after_punctuation", False),
                                      ("convert_continuous_to_present", False),
                                      ("no_wh_words", False),
                                      ("replace_this_is", False),
@@ -533,18 +534,18 @@ class HeuristicsTransformer:
                 row = {}
                 row["qanta_id"] = qb_id
                 row["original"] = question
+                row["answer"] = answer
                 row["parent"] = qq
                 row["chunk_id"] = chunk_id
-                row["result"] = new_question
+                row["question"] = new_question.lower()
                 row["transform"] = method_name
                 applied_transformations.append(row)
                 
-                active_set.add(new_question)
+                self.cache_analysis(new_question)
 
           if replace:
-            break
+            finished.add(qq)
 
-          
 
     self.current_analysis = None
     return applied_transformations
@@ -577,15 +578,18 @@ if __name__ == "__main__":
                            (98, "For 10 points , identify this Sanskrit - language author of \" The Cloud Messenger \" and The Recognition of Shakuntala ."),
                            (59, "For 10 points , name this mortal lover of Zeus and mother of Dionysus ."),
                            (20, "For 10 points , name this Italian author of The Name of the Rose and Foucault 's Pendulum ."),
-                           (17, "For 10 points , name this country , the home of the director of The Seventh Seal , Ingmar Bergman .")]:
+                           (17, "For 10 points , name this country , the home of the director of The Seventh Seal , Ingmar Bergman ."),
+                           (119, "For 10 points , name this 1859 essay condemning infringements on personal freedom , written by John Stuart Mill ."),
+                           (378, "Beginning with \" April is the cruellest month \" , for 10 points , name this long poem in five sections by T.S. Eliot ."),
+                           (361,  " who asserted \" the air is a spongy body / a promiscuous faceless being \" in \" The Balcony \" and asked \" Do I believe in man / or in the stars ? \" in another poem .")]:
 
-      transformations = heuristics(qid, 0, example, "what thing", "what")
+      transformations = heuristics(qid, "??", 0, example, "what thing", "what")
       for transform in transformations:
         logging.debug("===============================")
         logging.debug(transform["original"])
         logging.debug(transform["parent"])
         logging.debug(transform["transform"])           
-        logging.debug(transform["result"])
+        logging.debug(transform["question"])
    
 
   

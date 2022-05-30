@@ -103,8 +103,9 @@ class Question:
         for ii in chunks:
             yield ii
 
-        yield self.relative_inside_last_mention(nominals[-1], lexical_answer_type)
-        yield self.relative_inside_last_mention(nominals[-1], question_word)
+        if len(nominals) > 0:
+            yield self.relative_inside_last_mention(nominals[-1], lexical_answer_type)
+            yield self.relative_inside_last_mention(nominals[-1], question_word)
         
 if __name__ == "__main__":
     logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
