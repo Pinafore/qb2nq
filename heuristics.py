@@ -341,9 +341,11 @@ class HeuristicsTransformer:
       question = result
     yield question
 
-  def rejoin_whose(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
-    if "who 's" in question:
-      yield question.replace("who 's", "whose")
+  def rejoin_contractions(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+    for separated, together in {"who 's": "whose", "ca n't": "can't", "wo n't": "won't"}.iteritems():
+      if separated in question:
+        question = question.replace(separated, together)
+    yield question
 
   def split_conjunctions(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
     # First, find the verbs 
@@ -513,7 +515,7 @@ class HeuristicsTransformer:
                                      ("remove_BE_determiner", True),
                             # "fix_no_verb",
                                      ("add_space_before_punctuation", True),
-                                     ("rejoin_whose", True)]:
+                                     ("rejoin_contractions", True)]:
           method = getattr(self, method_name)
 
           if suppress_errors:

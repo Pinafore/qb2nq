@@ -9,6 +9,9 @@ import json
 import string
 
 import time
+from tqdm import tqdm
+
+import time
 import os
 import re
 import random
@@ -78,7 +81,7 @@ class QuestionRewriter:
         questions = questions['questions']
 
     transformed = []
-    for row in questions:
+    for row in tqdm(questions):
       question = Question(row['qanta_id'], row['page'], row['text'])
       transformed += self.single_question_transform(question)
 

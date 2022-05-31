@@ -4,11 +4,11 @@
     "to_trim": ["and", "but", "when", "while", ","],
     "pos_pronouns": ["his", "her", "their", "its"],
     "pronouns": ["he", "she", "it", "they"],
-    "remove_dict": {"[``ÃƒÂ©ã►Ã¢Ã¢â€‹â€¦â€•â€˜â–ºÃ£ÃƒÂ©]*": "",  "[\\W ]*$": "", "^[\\W ]*": "", "\\s*\"\\s*": " ", "[\\W ]*(ftp|FTP)[\\W ]*": " ", "[\\W]*[\\s]*(For|for) [\\s]*(ten|10|20|5|15) [\\s]*(Points|points|points)[\\W]* [\\W]*":" "},
+    "remove_dict": {"[``ÃƒÂ©ã►Ã¢Ã¢â€‹â€¦â€•â€˜â–ºÃ£ÃƒÂ©]*": "",  "[\\W ]*$": "", "^[\\W ]*": "", "\\s*\"\\s*": " ", "[\\W ]*(ftp|FTP)[\\W ]*": " ", "[\\W]*[\\s]*(For|for) [\\s]*(ten|10|20|5|15) [\\s]*(Points|points|points)[\\W]* [\\W]*":" ", "\s*\\[^\\]]*\\]\s*":""},
     "non_last_sent_transform_dict":{"this ":" which ", "This ":"Which ","his ":"whose ", "His ":"Whose ",
     "these ":"which ","it ":" what ", "its ": " what\\'s ","It ":"What ", "Its ":"What\\'s ","After ":""},
     "tokenizer": "distilbert-base-uncased",
-    "imperative": [".*(ftp|Ftp|FTP).*(give|identify|name) (this|these)", ".*(For|for) [\\s]*(ten|10|20|5|15) [\\s]*(Points|points|points)[\\W]* [\\W] (give|identify|name) (this|these)"],
+    "imperative": [".*(ftp|Ftp|FTP).*(give|identify|name) (this|these|what|which)", ".*(For|for) [\\s]*(ten|10|20|5|15) [\\s]*(Points|points|points)[\\W]* [\\W] (give|identify|name) (this|these|what|which)"],
     "loaded_model": "./TriviaQuestion2NQ_Transform_Dataset/BERT_Classification/Aug19_answer_type_classification_model/",
     "last_sent_word_transform_30000": "./TriviaQuestion2NQ_Transform_Dataset/word_transform_dict.json",
     "answer_type_dict_before_parse_tree_nq_like_test_v_3": "./TriviaQuestion2NQ_Transform_Dataset/qanta_id_to_the_answer_type_most_freq_phrase_based_on_page_dict.json"
