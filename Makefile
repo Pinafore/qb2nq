@@ -1,5 +1,5 @@
 
-qbdataset = qanta.train.2021.12.20.json
+qbdataset = qanta.train.2018.04.18.json
 
 qanta.train.2018.04.18.json: 
 	wget https://s3-us-west-2.amazonaws.com/pinafore-us-west-2/qanta-jmlr-datasets/qanta.train.2018.04.18.json

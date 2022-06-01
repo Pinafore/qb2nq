@@ -16,6 +16,7 @@ import os
 import re
 import random
 import argparse
+import io
 
 import logging
 from collections import defaultdict
@@ -110,7 +111,7 @@ if __name__ == "__main__":
   parser.add_argument('--limit', type=int,
                       default=-1,help="Limit of number of QB questions input")
   parser.add_argument('--qb_path', type=str,
-                      default='qanta.train.2021.12.20.json',
+                      default='qanta.train.2018.04.18.json',
                       help="path of the qb dataset")
   parser.add_argument('--lat_freq', type=str, default='intermediate_results/lat_frequency.json',
                       help="JSON of frequency for each LAT")
@@ -142,8 +143,8 @@ if __name__ == "__main__":
     lat_frequency[int(ii)] = lat_frequency[ii]
   logging.info("Loaded %i LAT keys, e.g.: %s" % (len(lat_frequency), str(lat_frequency.keys())[:120]))
 
-  # read contents from config.json file
-  with open(args.config_file) as json_file:
+  # read contents from config.json file, encoding needs "utf-8"
+  with io.open(args.config_file, "r", encoding="utf-8") as json_file:
     config = json.load(json_file)
 
   transformer = HeuristicsTransformer(config, lat_frequency)

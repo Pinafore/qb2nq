@@ -17,7 +17,8 @@ class LatFrequencyComputer:
     self.page_frequency = defaultdict(Counter)
     self.bad_tokens = bad_tokens
 
-  def count_answer_types(self, question, max_length=4) -> Counter[str]:
+  def count_answer_types(self, question, max_length=4):
+    #-> Counter[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     lexical_answer_types = Counter()
     # Final all the 'this'
     for span in question.answer_nominal_mentions():
@@ -44,7 +45,8 @@ class LatFrequencyComputer:
         page = qb_data[i]['page']
         text = qb_data[i]['text']
         lats = self.count_answer_types(Question(qid, page, text))
-        if i % 500 == 0:
+        # Printing here could cause unicode conversion error ifpage is not pure ASCII
+        if i % 10000 == 0:
           print("===> %i/%i: %s %s" % (i, len(qb_data), page, str(lats)))
         if limit > 0 and i > limit:
           break
@@ -62,9 +64,6 @@ class LatFrequencyComputer:
     if os.path.exists(qanta_train_with_answer_type_path) == False:
       print('Please check if {} exists in the current folder'.format(qanta_train_with_answer_type_path))
     qb_df = pd.read_json(qanta_train_with_answer_type_path, lines=True, orient='records')
-
-    if os.path.exists(qanta_train_with_answer_type_path) == False:
-      print('Please check if {} exists in the current folder'.format(orig_qb_path))
       
     with open(qanta_train_with_answer_type_path) as f1:
       page_to_most_freq_answer_type_dict = {}
@@ -82,7 +81,7 @@ if __name__ == "__main__":
   parser.add_argument('--limit', type=int,
                       default=-1,help="Limit of number of QB questions input")
   parser.add_argument('--qb_path', type=str,
-                      default='qanta.train.2021.12.20.json',
+                      default='qanta.train.2018.04.18.json',
                       help="path of the qb dataset")
   args = parser.parse_args()
   

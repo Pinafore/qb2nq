@@ -41,7 +41,9 @@ class HeuristicsTransformer:
     self.non_last_sent_transform_dict = config["non_last_sent_transform_dict"]
     self.answer_type_dict = lat_lookup
 
-  def add_question_word_if_no_pronouns(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def add_question_word_if_no_pronouns(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
+    
     # input: questions after the parse tree steps and before transformation
     q = question[0].lower()+question[1:]
 
@@ -86,7 +88,8 @@ class HeuristicsTransformer:
     yield q
     
   # Heuristic 1 remove punctuation patterns at the beginning and the end of the question [" ' ( ) , .]
-  def remove_regexp_patterns(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def remove_regexp_patterns(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Remove punctuation patterns at the beginning and the end of the question
     """
@@ -97,7 +100,8 @@ class HeuristicsTransformer:
     yield question.replace("  ", "").strip()
 
   # Heuristic 2 -- name this answer type correction
-  def imperative_to_question(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def imperative_to_question(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Convert "-- name this" patterns to "which"
     """
@@ -131,7 +135,8 @@ class HeuristicsTransformer:
           yield "%s is the %s" % (question_determiner, reduced)
 
   # Heuristic 3 semicolon
-  def drop_after_punctuation(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def drop_after_punctuation(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Remove contents after semicolon in NQlike
     """
@@ -159,7 +164,8 @@ class HeuristicsTransformer:
       num_of_verb = num_of_verb + counted[v]
     return num_of_verb
 
-  def remove_rep_subject(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def remove_rep_subject(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     remove is this... pattern
     """
@@ -171,7 +177,8 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic 6 change be determiner to s possession
-  def remove_BE_determiner(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def remove_BE_determiner(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     change is his/is her/is its to 's
     """
@@ -181,7 +188,8 @@ class HeuristicsTransformer:
     yield question
 
   # function to add space before punctuation
-  def add_space_before_punctuation(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def add_space_before_punctuation(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     add space before punctuation because in NQ there's space before all types of punctuation
     """
@@ -189,7 +197,8 @@ class HeuristicsTransformer:
     q = ' '.join(tokens)
     yield q
 
-  def fix_no_verb(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def fix_no_verb(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    # -> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     if (self.count_num_of_verbs(question, True) == 0):
       tokens = self.current_analysis[question]["nltk_tokens"]
       tagged = self.current_analysis[question]["nltk_tags"]
@@ -209,7 +218,8 @@ class HeuristicsTransformer:
       yield question
 
   # Heuristic 8 remove repetitive be verb when there's more verbs
-  def remove_repeat_verb(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def remove_repeat_verb(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     remove is he/is she/is it
     """
@@ -220,7 +230,8 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic 9 First verb after which in continuous tense
-  def convert_continuous_to_present(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def convert_continuous_to_present(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     if the first verb is in continuous tense, change it to nomal
     """
@@ -249,7 +260,8 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic11 convert this to which
-  def no_wh_words(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def no_wh_words(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     result = question
     wh_words = self.wh_words
     wh_re = re.compile("|".join(wh_words))
@@ -272,7 +284,8 @@ class HeuristicsTransformer:
     yield result
 
   # Heuristic12
-  def replace_this_is(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def replace_this_is(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Replace 'this' to 'which'+answer_type within 'this is' pattern.
     """
@@ -292,7 +305,8 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic14: double auxiliary words
-  def remove_extra_AUX(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def remove_extra_AUX(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Remove extra auxiliary words.
     """
@@ -319,7 +333,8 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic15: WDT+BE patterns
-  def replace_which_with_this(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def replace_which_with_this(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Convert 'which' to 'that' and check if no 'which' present anymore, if so, convert 'this' to 'which'.
     """
@@ -341,13 +356,15 @@ class HeuristicsTransformer:
       question = result
     yield question
 
-  def rejoin_contractions(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
-    for separated, together in {"who 's": "whose", "ca n't": "can't", "wo n't": "won't"}.iteritems():
+  def rejoin_contractions(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    # -> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
+    for separated, together in {"who 's": "whose", "ca n't": "can't", "wo n't": "won't"}.items():
       if separated in question:
         question = question.replace(separated, together)
     yield question
 
-  def split_conjunctions(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def split_conjunctions(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     # First, find the verbs 
     parse = self.current_analysis[question]["spacy"]
     
@@ -404,7 +421,8 @@ class HeuristicsTransformer:
   # Heuristic16: 
   # WDT tag: which/what
   # WRB tag: where/why/when
-  def add_question_word(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def add_question_word(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Adding 'which+answer_type' at the beginning when no WDT/WRB present.
     """
@@ -427,7 +445,8 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic17: VERB/AUX at the beginning of the sample while missing the object
-  def add_subject(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def add_subject(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Adding 'which+answer_type' at the beginning when starting with VERB/AUX and missing the subject.
     """
@@ -444,7 +463,8 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic18: 'which none is' patterns
-  def which_none_is(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def which_none_is(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Convert 'which none is' to 'what is'.
     """
@@ -461,7 +481,8 @@ class HeuristicsTransformer:
     yield question
 
   # Heuristic19: 'what is which' pattern
-  def what_is_which(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str) -> Iterable[str]:
+  def what_is_which(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Remove "what is" from "what is which".
     """
