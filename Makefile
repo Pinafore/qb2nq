@@ -7,12 +7,14 @@ qanta.train.2018.04.18.json:
 neuralcoref:
 	git clone https://github.com/huggingface/neuralcoref.git; \
 	cd neuralcoref; \
-	pip install -r requirements.txt; \
-	pip install -e .; \
+	pip3 install -r requirements.txt; \
+	pip3 install -e .; \
 
 prereqs: $(qbdataset) neuralcoref
-	pip install -r "requirements.txt"; \
-	echo "Done"; \
+	pip3 install -r "requirements.txt"
+	python3 -m nltk.downloader all
+	python3 -m spacy download en_core_web_sm
+	echo "Done"
 
 intermediate_results/lat_frequency.json: prereqs compute_lat_frequency.py $(qbdataset) 
 	python3 compute_lat_frequency.py --qb_path=$(qbdataset)
