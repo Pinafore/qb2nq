@@ -96,9 +96,16 @@ def count_num_nouns(text):
     noun_num = counts['NN']
     return noun_num
 
-def count_duplicates(x):
-      counter = Counter(x_list.lower().split())
-      return sum(1 for x in counter if counter[x] > 1)
+def count_unique_words(x):
+      counter = Counter(x.lower().split())
+      return sum(1 for x in counter if counter[x] >= 1)
+    
+def count_max_duplicates(x):
+      counter = Counter(x.lower().split())
+      if len(counter.values()) > 0:
+        return max(counter.values())
+      else:
+        return 0
 
 # function to get number of verbs
 def count_num_verbs(text):
@@ -110,10 +117,6 @@ def count_num_verbs(text):
     return verb_num
 
 # function compute maximum idf score feature
-def count_max_duplicates(x):
-   counter = Counter(x.lower().split())
-   return max(counter.values())
-
 def extract_terms( document ):
    terms = document.lower().replace('?',' ').replace('.',' ').replace(',',' ').split()
    return terms
@@ -131,6 +134,7 @@ def calculate_idf( documents ):
        term_IDF = math.log(float(N) / term_frequency)
        IDF[term] = term_IDF
    return IDF
+ 
 def num_of_words(qq):
   return len(qq.split())
 
@@ -206,19 +210,12 @@ class Classifier:
   def get_kincaid(self, df_train):
     return df_train['question'].apply(textstat.flesch_kincaid_grade).values
 
-  def get_max_duplicates(self, df_train):
-    return df_train['question'].apply(count_max_duplicates).values
-
   # function to compute duplicate feature
-  def get_duplicates(self, df_train):    
-    values = df_train['question'].apply(count_duplicates).values
+  def get_uniques(self, df_train):    
+    values = df_train['question'].apply(count_unique_words).values
     values = values.reshape([len(values), 1])
     return values
-
-  # function to compute kincaid readability score
-  def get_kincaid(self, df_train):
-    return df_train['question'].apply(textstat.flesch_kincaid_grade).values
-
+  
   def get_num_nouns(self, df_train):
     return df_train['question'].apply(count_num_nouns).values
 
@@ -239,17 +236,36 @@ class Classifier:
         max_idf.append(len(documents))
     return max_idf
   
-  def is_in_nq_length_percentile(self, x):
+  def get_max_duplicates(self, df_train):
+    values =  df_train['question'].apply(count_max_duplicates).values
+    values = values.reshape([len(values), 1])
+    return values
+  
+  def is_in_nq_length_percentile_5(self, x):
     lower, upper = self.nq_len
     num = num_of_words(x)
-    if num >= lower and num <= upper:
+    if num >= lower:
       return 1
     else:
       return 0
+    
+  def is_in_nq_length_percentile_95(self, x):
+    lower, upper = self.nq_len
+    num = num_of_words(x)
+    if num <= upper:
+      return 1
+    else:
+      return 0
+    
+  def get_percentile_length_5(self, df_train):
+    values = df_train['question'].apply(self.is_in_nq_length_percentile_5).values
+    values = values.reshape([len(values), 1])
+    return values
   
-  def get_percentile_length(self, df_train):
-    return df_train['question'].apply(self.is_in_nq_length_percentile).values
-
+  def get_percentile_length_95(self, df_train):
+    values = df_train['question'].apply(self.is_in_nq_length_percentile_95).values
+    values = values.reshape([len(values), 1])
+    return values
 
   def get_word2vec(self, df_train):
     return df_train['question'].apply(self.w2v.vectorize).values
@@ -372,21 +388,22 @@ class Classifier:
 if __name__=="__main__":
   logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
   parser = argparse.ArgumentParser(description="Create classifier to discriminate synthetic questions from real questions")
-  parser.add_argument('--limit', type=int, default=20)
-  parser.add_argument('-f', '--feature_list', nargs='+', default=['percentile_length', 'max_duplicates', 'bigrams'])
+  parser.add_argument('--limit', type=int, default=-1)
+  parser.add_argument('-f', '--feature_list', nargs='+', default=['uniques','max_duplicates', 'percentile_length_5','percentile_length_95', 'bigrams'])
   parser.add_argument('--predictions', type=str, default='intermediate_results/nqlike_scores.csv')
-  parser.add_argument('--nq_data', type=str, default='TriviaQuestion2NQ_Transform_Dataset/NaturalQuestions_train_reformatted_Feb24.json')
-  parser.add_argument('--nqlike_data', type=str, default='intermediate_results/nq_like.json')  
+  parser.add_argument('--nq_data', type=str, default='TriviaQuestion2NQ_Transform_Dataset/NaturalQuestions_train_reformatted.json')
+  parser.add_argument('--nqlike_data', type=str, default='intermediate_results/nqlike_train.json')  
   parser.add_argument('--max_term_features', type=int, default=50)
+  parser.add_argument('--seq', type=str, default='')
   args = parser.parse_args()
 	# set flag and if_qb_last_sent here
 	# 0 --wellformedness accuracy output
 	# 1 --NQ-like output
 
-    
-  train, test, nq_like, nq_len = build_dataset(args.nq_data, args.nqlike_data, args.max_term_features)
+  nqlike_path = 'nqlike_train/{}.json'.format(args.seq)
+  train, test, nq_like, nq_len = build_dataset(args.nq_data, nqlike_path, args.limit)
 
-  c = Classifier(args.feature_list, max_term_features=args.max_term_features, nq_len = nq_len)
+  c = Classifier(args.feature_list, max_term_features=args.max_term_features, nq_len=nq_len)
   c.initialize_tokenizer(train)
   
   # TODO: Would be good to do cross-fold validation for the NQ like predictions
@@ -394,13 +411,16 @@ if __name__=="__main__":
   # Train model and output the weights
   model = c.train_classifier(train)
   weight_dict = c.generate_feature_weight(model)
+  
+  c.evaluate(model, test)
   logging.info("Weight dict", weight_dict)
   with open('intermediate_results/logistic_regression_weight_dict_QB_NQ.txt', 'w') as f:
     f.write(json.dumps(weight_dict))
   
   # save feature weight  
+  prediction_path = 'nqlike_train/nqlike_scores_{}.csv'.format(args.seq)
   if args.predictions:
 		# test
-    print('QB NQ Test ')
-    c.save_dictionary(nq_like, args.predictions)
+    print('Evaluate NQ-like')
+    c.save_dictionary(nq_like, prediction_path)
     
