@@ -57,6 +57,10 @@ from haystack.nodes.retriever.sparse import BM25Retriever  # keep it here !  # p
 from haystack.nodes.retriever.dense import DensePassageRetriever  # keep it here !  # pylint: disable=unused-import
 from haystack.nodes.preprocessor import PreProcessor
 from haystack.nodes.retriever.base import BaseRetriever
+from haystack.utils import clean_wiki_text, convert_files_to_docs, fetch_archive_from_http, print_answers
+from haystack.nodes import FARMReader, TransformersReader
+from haystack.document_stores import FAISSDocumentStore
+from haystack.pipelines import ExtractiveQAPipeline
 
 
 logger = logging.getLogger(__name__)
@@ -68,16 +72,8 @@ from haystack.document_stores import FAISSDocumentStore
 from haystack.nodes import RAGenerator, DensePassageRetriever
 from haystack.utils import print_answers, fetch_archive_from_http
 
-
+    
 def tutorial7_rag_generator():
-    # Add documents from which you want generate answers
-    # Download a csv containing some sample documents data
-    # Here some sample documents data
-    #doc_dir = "data/tutorial7/"
-    #s3_url = "https://s3.eu-central-1.amazonaws.com/deepset.ai-farm-qa/datasets/small_generator_dataset.csv.zip"
-    # fetch_archive_from_http(url=s3_url, output_dir=doc_dir)
-
-    # Get dataframe with columns "title", and "text"
     df = pd.read_csv("psgs_w100_tmp.tsv", sep="\t")
     # Minimal cleaning
     df.fillna(value="", inplace=True)
@@ -172,41 +168,74 @@ def has_is_impossible(squad_data: dict):
     return False
 
 
+def pos_context(str):
+    document_store = FAISSDocumentStore(faiss_index_factory_str="Flat")
+    doc_dir = "wiki"
+    #s3_url = "https://s3.eu-central-1.amazonaws.com/deepset.ai-farm-qa/datasets/documents/wiki_gameofthrones_txt6.zip"
+    #fetch_archive_from_http(url=s3_url, output_dir=doc_dir)
+    
+    # Convert files to dicts
+    docs = convert_files_to_docs(dir_path=doc_dir, clean_func=clean_wiki_text, split_paragraphs=True)
+    document_store.write_documents(docs)
+    retriever = DensePassageRetriever(
+    document_store=document_store,
+    query_embedding_model="facebook/dpr-question_encoder-single-nq-base",
+    passage_embedding_model="facebook/dpr-ctx_encoder-single-nq-base",
+    max_seq_len_query=64,
+    max_seq_len_passage=256,
+    batch_size=16,
+    use_gpu=True,
+    embed_title=True,
+    use_fast_tokenizers=True,
+    )
+    # Important:
+    # Now that after we have the DPR initialized, we need to call update_embeddings() to iterate over all
+    # previously indexed documents and update their embedding representation.
+    # While this can be a time consuming operation (depending on corpus size), it only needs to be done once.
+    # At query time, we only need to embed the query and compare it the existing doc embeddings which is very fast.
+    document_store.update_embeddings(retriever)
+    reader = FARMReader(model_name_or_path="deepset/roberta-base-squad2", use_gpu=True)
+    pipe = ExtractiveQAPipeline(reader, retriever)
+    prediction = pipe.run(
+    query=str, params={"Retriever": {"top_k": 10}, "Reader": {"top_k": 5}}
+    )
+    print_answers(prediction, details="minimum")
+    return prediction
+
+# Now, let's write the dicts containing documents to our DB.
+
 def create_dpr_training_dataset(squad_data: dict, retriever: BaseRetriever, num_hard_negative_ctxs: int = 30):
     n_non_added_questions = 0
     n_questions = 0
     for idx_article, article in enumerate(tqdm(squad_data, unit="article")):
-        article_title = article.get("title", "")
-        for paragraph in article["paragraphs"]:
-            context = paragraph["context"]
-            for question in paragraph["qas"]:
-                if "is_impossible" in question and question["is_impossible"]:
-                    continue
-                answers = [a["text"] for a in question["answers"]]
-                hard_negative_ctxs = get_hard_negative_contexts(
-                    retriever=retriever, question=question["question"], answers=answers, n_ctxs=num_hard_negative_ctxs
-                )
-                positive_ctxs = [{"title": article_title, "text": context, "passage_id": ""}]
+        print("idx",idx_article)
+        print("article",article)
+        article_title = article.get("qanta_id", "")
+        context = article["context"]
+        answers = article["answer"]
+        hard_negative_ctxs = get_hard_negative_contexts(
+            retriever=retriever, question=article["question"], answers=answers, n_ctxs=num_hard_negative_ctxs
+            )
+        positive_ctxs = [{"title": article_title, "text": context, "passage_id": ""}]
 
-                if not hard_negative_ctxs or not positive_ctxs:
-                    logging.error(
-                        f"No retrieved candidates for article {article_title}, with question {question['question']}"
-                    )
-                    n_non_added_questions += 1
-                    continue
-                dict_DPR = {
-                    "question": question["question"],
-                    "answers": answers,
-                    "positive_ctxs": positive_ctxs,
-                    "negative_ctxs": [],
-                    "hard_negative_ctxs": hard_negative_ctxs,
-                }
-                n_questions += 1
-                yield dict_DPR
+        if not hard_negative_ctxs or not positive_ctxs:
+            logging.error(
+                f"No retrieved candidates for article {article_title}, with question {article['question']}"
+                )
+            n_non_added_questions += 1
+            continue
+        dict_DPR = {
+            "question": article["question"],
+            "answers": answers,
+            "positive_ctxs": positive_ctxs,
+            "negative_ctxs": [],
+            "hard_negative_ctxs": hard_negative_ctxs,
+        }
+        n_questions += 1
+        yield dict_DPR
 
     logger.info(f"Number of skipped questions: {n_non_added_questions}")
     logger.info(f"Number of added questions:   {n_questions}")
-
 
 def save_dataset(iter_dpr: Iterator, dpr_output_filename: Path, total_nb_questions: int, split_dataset: bool):
     if split_dataset:
@@ -231,13 +260,14 @@ def save_dataset(iter_dpr: Iterator, dpr_output_filename: Path, total_nb_questio
 def get_hard_negative_contexts(retriever: BaseRetriever, question: str, answers: List[str], n_ctxs: int = 30):
     list_hard_neg_ctxs = []
     retrieved_docs = retriever.retrieve(query=question, top_k=n_ctxs, index="document")
+    print("docs",len(retrieved_docs),type(retrieved_docs))
     for retrieved_doc in retrieved_docs:
         retrieved_doc_id = retrieved_doc.meta.get("name", "")
         retrieved_doc_text = retrieved_doc.content
-        if any(answer.lower() in retrieved_doc_text.lower() for answer in answers):
-            continue
+        #if any(answer.lower() in retrieved_doc_text.lower() for answer in answers):
+            #continue
         list_hard_neg_ctxs.append({"title": retrieved_doc_id, "text": retrieved_doc_text, "passage_id": ""})
-
+    print("hard",list_hard_neg_ctxs)
     return list_hard_neg_ctxs
 
 
@@ -280,7 +310,8 @@ def main(
     #document_store=tutorial7_rag_generator()
     
     # 3. Load data into the document store
-    #document_store.add_eval_data(squad_file_path.as_posix(), doc_index="document", preprocessor=preprocessor)
+    document_store.add_eval_data(squad_file_path.as_posix(), doc_index="document", preprocessor=preprocessor)
+    print("count of documrnt",document_store.get_document_count())
 
     # 4. Prepare retriever
     retriever_factory = HaystackRetriever(
@@ -361,8 +392,8 @@ if __name__ == "__main__":
         dpr_output_filename=dpr_output_filename,
         preprocessor=preprocessor,
         document_store_type_config=("ElasticsearchDocumentStore", store_dpr_config),
-        # retriever_type_config=("DensePassageRetriever", retriever_dpr_config),  # dpr
-        retriever_type_config=("BM25Retriever", retriever_bm25_config),  # bm25
+        retriever_type_config=("DensePassageRetriever", retriever_dpr_config),  # dpr
+        #retriever_type_config=("BM25Retriever", retriever_bm25_config),  # bm25
         num_hard_negative_ctxs=num_hard_negative_ctxs,
         split_dataset=split_dataset,
     )
