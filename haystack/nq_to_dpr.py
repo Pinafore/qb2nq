@@ -264,8 +264,14 @@ def get_hard_negative_contexts(retriever: BaseRetriever, question: str, answers:
     for retrieved_doc in retrieved_docs:
         retrieved_doc_id = retrieved_doc.meta.get("name", "")
         retrieved_doc_text = retrieved_doc.content
+        print(answers.lower())
+        #print("text:",retrieved_doc_text.lower())
+        if answers.lower() in retrieved_doc_text.lower():
+            print(answers," with text",retrieved_doc_text.lower())
+            continue
         #if any(answer.lower() in retrieved_doc_text.lower() for answer in answers):
-            #continue
+        #    print(answers," with text",retrieved_doc_text.lower())
+        #    continue*/
         list_hard_neg_ctxs.append({"title": retrieved_doc_id, "text": retrieved_doc_text, "passage_id": ""})
     print("hard",list_hard_neg_ctxs)
     return list_hard_neg_ctxs
