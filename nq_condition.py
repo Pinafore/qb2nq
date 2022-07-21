@@ -1,7 +1,7 @@
 if precondition==true:
     apply_heuristic()
     
-/*
+"""
 import logging
 import argparse
 import json
@@ -617,4 +617,4 @@ if __name__ == "__main__":
         logging.debug(transform["parent"])
         logging.debug(transform["transform"])           
         logging.debug(transform["question"])
-*/
+"""
