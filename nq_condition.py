@@ -1,7 +1,3 @@
-if precondition==true:
-    apply_heuristic()
-    
-"""
 import logging
 import argparse
 import json
@@ -45,63 +41,65 @@ class HeuristicsTransformer:
     self.non_last_sent_transform_dict = config["non_last_sent_transform_dict"]
     self.answer_type_dict = lat_lookup
 
-  def add_question_word_if_no_pronouns(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
-    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
+class add_question_word_if_no_pronouns:
+    def init(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+        #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
+        
+        # input: questions after the parse tree steps and before transformation
+        q = question[0].lower()+question[1:]
     
-    # input: questions after the parse tree steps and before transformation
-    q = question[0].lower()+question[1:]
-
-    question_test = self.current_analysis[question]["spacy"]
-    pronouns_tags = {"PRON", "WDT", "WP", "WP$", "WRB", "VEZ"}
-    # check whether there are any pronouns or not in the sentence q
-    flag = True
-    for token in question_test:
-      if token.tag_ in pronouns_tags:
-        flag = False
-        break
-
-    if flag == True:
-      # no pronouns in the question
-
-      # check wether answer type is singular or plural
-      answer_type = self.answer_type_dict[qb_id]
-      processed_text = nlp(answer_type)
-      lemma_tags = {"NNS", "NNPS"}
-
-      sigular_plural_flags = True # singular
-      for token in processed_text:
-        if token.tag_ == 'NNPS':
-          sigular_plural_flags = False # plural
-          break
-
-      # check if the first toke is VERB
-      if question_test[0].pos_ == 'VERB' and question_test[1].pos_ != 'PART' and question_test[2].pos_ != 'AUX':
-        replacement = 'which '+answer_type+' '
-        q = replacement+q
-      else:
-        if sigular_plural_flags == False:
-          # plural
-          replacement = 'which '+answer_type+' are '
-          q = replacement+q
-        else:
-          # singular
-          replacement = 'which '+answer_type+' is '
-          q = replacement+q
-    # capitalize the first letter of each sentence
-    q = q[0].upper()+q[1:]
-    yield q
+        question_test = self.current_analysis[question]["spacy"]
+        pronouns_tags = {"PRON", "WDT", "WP", "WP$", "WRB", "VEZ"}
+        # check whether there are any pronouns or not in the sentence q
+        flag = True
+        for token in question_test:
+          if token.tag_ in pronouns_tags:
+            flag = False
+            break
     
+        if flag == True:
+          # no pronouns in the question
+    
+          # check wether answer type is singular or plural
+          answer_type = self.answer_type_dict[qb_id]
+          processed_text = nlp(answer_type)
+          lemma_tags = {"NNS", "NNPS"}
+    
+          sigular_plural_flags = True # singular
+          for token in processed_text:
+            if token.tag_ == 'NNPS':
+              sigular_plural_flags = False # plural
+              break
+    
+          # check if the first toke is VERB
+          if question_test[0].pos_ == 'VERB' and question_test[1].pos_ != 'PART' and question_test[2].pos_ != 'AUX':
+            replacement = 'which '+answer_type+' '
+            q = replacement+q
+          else:
+            if sigular_plural_flags == False:
+              # plural
+              replacement = 'which '+answer_type+' are '
+              q = replacement+q
+            else:
+              # singular
+              replacement = 'which '+answer_type+' is '
+              q = replacement+q
+        # capitalize the first letter of each sentence
+        q = q[0].upper()+q[1:]
+        yield q
+        
   # Heuristic 1 remove punctuation patterns at the beginning and the end of the question [" ' ( ) , .]
-  def remove_regexp_patterns(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
-    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
-    """
-    Remove punctuation patterns at the beginning and the end of the question
-    """
-
-    question = question
-    for pattern, replacement in self.regexp_trims.items():
-      question = pattern.sub(replacement, question)
-    yield question.replace("  ", "").strip()
+class remove_regexp_patterns:
+    def init(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+        #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
+        """
+        Remove punctuation patterns at the beginning and the end of the question
+        """
+    
+        question = question
+        for pattern, replacement in self.regexp_trims.items():
+          question = pattern.sub(replacement, question)
+        yield question.replace("  ", "").strip()
 
   # Heuristic 2 -- name this answer type correction
   def imperative_to_question(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
@@ -617,4 +615,4 @@ if __name__ == "__main__":
         logging.debug(transform["parent"])
         logging.debug(transform["transform"])           
         logging.debug(transform["question"])
-"""
+    
