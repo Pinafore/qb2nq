@@ -42,7 +42,7 @@ class HeuristicsTransformer:
     self.answer_type_dict = lat_lookup
 
 class add_question_word_if_no_pronouns:
-    def init(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    def __init__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
         #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         
         # input: questions after the parse tree steps and before transformation
@@ -90,7 +90,7 @@ class add_question_word_if_no_pronouns:
         
   # Heuristic 1 remove punctuation patterns at the beginning and the end of the question [" ' ( ) , .]
 class remove_regexp_patterns:
-    def init(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    def __init__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
         #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         """
         Remove punctuation patterns at the beginning and the end of the question
@@ -102,69 +102,72 @@ class remove_regexp_patterns:
         yield question.replace("  ", "").strip()
 
   # Heuristic 2 -- name this answer type correction
-  def imperative_to_question(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
-    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
-    """
-    Convert "-- name this" patterns to "which"
-    """
-    for pattern in self.imperative_pattern:
-      if pattern.search(question):
-        parse = self.current_analysis[question]["spacy"]
-        # find the mention, the first noun after identify, name, or give
-        verb_position = min(x.i for x in parse if x.text.lower() in ["name", "give", "identify"])
-        mention = parse[verb_position + 1].head
-        
-        # is there a relative clause or an appositive?
-        if 'relcl' in [x.dep_ for x in mention.children]:
-          # find the relative clause head
-          relative_head = [x for x in mention.children if x.dep_ == "relcl"]
-          if len(relative_head) > 1:
-            logging.warn("Two relative clauses for an 'identify' construction, and we don't know how to handle that")
-            return
-          relative_head = relative_head[0]
-          continuation = " ".join(x.text for x in parse[relative_head.left_edge.i+1:relative_head.right_edge.i+1])
-          yield "%s %s %s" % (question_determiner, lexical_answer_type, continuation)
-        elif len(parse) > mention.i + 1 and parse[mention.i + 1].text == ',':
-          # If there is an appostive, then turn it into a question
-          continuation = " ".join(x.text for x in parse[(mention.i + 2):])
-          yield "%s is %s" % (lexical_answer_type, continuation)   
-        else:
-          # If not, just cut the "For 10 ... points [name/identify]" and yield that
-          reduced = pattern.sub("", question).strip()
-          yield reduced
-
-          # and the question version
-          yield "%s is the %s" % (question_determiner, reduced)
+class imperative_to_question:
+    def __init__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+        #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
+        """
+        Convert "-- name this" patterns to "which"
+        """
+        for pattern in self.imperative_pattern:
+          if pattern.search(question):
+            parse = self.current_analysis[question]["spacy"]
+            # find the mention, the first noun after identify, name, or give
+            verb_position = min(x.i for x in parse if x.text.lower() in ["name", "give", "identify"])
+            mention = parse[verb_position + 1].head
+            
+            # is there a relative clause or an appositive?
+            if 'relcl' in [x.dep_ for x in mention.children]:
+              # find the relative clause head
+              relative_head = [x for x in mention.children if x.dep_ == "relcl"]
+              if len(relative_head) > 1:
+                logging.warn("Two relative clauses for an 'identify' construction, and we don't know how to handle that")
+                return
+              relative_head = relative_head[0]
+              continuation = " ".join(x.text for x in parse[relative_head.left_edge.i+1:relative_head.right_edge.i+1])
+              yield "%s %s %s" % (question_determiner, lexical_answer_type, continuation)
+            elif len(parse) > mention.i + 1 and parse[mention.i + 1].text == ',':
+              # If there is an appostive, then turn it into a question
+              continuation = " ".join(x.text for x in parse[(mention.i + 2):])
+              yield "%s is %s" % (lexical_answer_type, continuation)   
+            else:
+              # If not, just cut the "For 10 ... points [name/identify]" and yield that
+              reduced = pattern.sub("", question).strip()
+              yield reduced
+    
+              # and the question version
+              yield "%s is the %s" % (question_determiner, reduced)
 
   # Heuristic 3 semicolon
-  def drop_after_punctuation(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
-    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
-    """
-    Remove contents after semicolon in NQlike
-    """
-    for pattern in [re.compile("[;,!?.].*$"), re.compile("^[;,!?.].*")]:
-      if pattern.search(question):
-        question = pattern.sub('', question)
-        yield question
+class drop_after_punctuation:
+    def __init__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+        #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
+        """
+        Remove contents after semicolon in NQlike
+        """
+        for pattern in [re.compile("[;,!?.].*$"), re.compile("^[;,!?.].*")]:
+          if pattern.search(question):
+            question = pattern.sub('', question)
+            yield question
     
   
   # Heuristic 5 remove repetition of the subject âis thisâ
-  def count_num_of_verbs(self,text, strictly = False):
-    """
-    count the number of verbs
-    """
-    verb_tags = []
-    if strictly:
-      verb_tags = self.strictly_valid_verbs
-    else:
-      verb_tags = self.valid_verbs
-    tokens = self.current_analysis[text]["nltk_tokens"]
-    tagged = self.current_analysis[text]["nltk_tags"]
-    counted = Counter(tag for word,tag in tagged)
-    num_of_verb = 0
-    for v in verb_tags:
-      num_of_verb = num_of_verb + counted[v]
-    return num_of_verb
+class count_num_of_verbs:
+    def __init__(self,text, strictly = False):
+        """
+        count the number of verbs
+        """
+        verb_tags = []
+        if strictly:
+          verb_tags = self.strictly_valid_verbs
+        else:
+          verb_tags = self.valid_verbs
+        tokens = self.current_analysis[text]["nltk_tokens"]
+        tagged = self.current_analysis[text]["nltk_tags"]
+        counted = Counter(tag for word,tag in tagged)
+        num_of_verb = 0
+        for v in verb_tags:
+          num_of_verb = num_of_verb + counted[v]
+        return num_of_verb
 
   def remove_rep_subject(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
