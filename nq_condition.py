@@ -1,7 +1,7 @@
 
 class ConditionalHeuristic:
   def __init__(self, analysis):
-    self.current_analysis = analysis
+    self.current_analysis = {}
     self.replace = True
   
   def precondition(self, question):
