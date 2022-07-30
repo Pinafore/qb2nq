@@ -1,23 +1,14 @@
-import logging
-import argparse
-import json
-from collections import Counter
 
-import traceback
-import re
-from collections import defaultdict
-from collections import Iterable
+class ConditionalHeuristic:
+  def __init__(self, analysis):
+    self.current_analysis = analysis
+    self.replace = True
+  
+  def precondition(self, question):
+    return True
 
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.corpus import wordnet as wn
-from nltk import Tree
-
-import spacy
-import neuralcoref
-
-nlp = spacy.load('en_core_web_sm')
-neuralcoref.add_to_pipe(nlp)
+  def postcondition(self, question):
+    return True
 
 def to_nltk_tree(node):
     if node.n_lefts + node.n_rights > 0:
@@ -25,24 +16,8 @@ def to_nltk_tree(node):
     else:
         return node.orth_
 
-
-# Heuristics for NQlike quality checking
-class HeuristicsTransformer:
-  def __init__(self, config, lat_lookup):
-    self.current_analysis = {}    
-    self.valid_verbs = config["valid_verbs"]
-    self.wh_words = config["wh_words"]
-    self.strictly_valid_verbs = config["strictly_valid_verbs"]
-    self.to_trim = config["to_trim"]
-    self.pos_pronouns = config["pos_pronouns"]
-    self.pronouns = config["pronouns"]
-    self.imperative_pattern = {re.compile(x) for x in config["imperative"]}
-    self.regexp_trims = dict((re.compile(x), y) for x, y in config["remove_dict"].items())
-    self.non_last_sent_transform_dict = config["non_last_sent_transform_dict"]
-    self.answer_type_dict = lat_lookup
-
-class add_question_word_if_no_pronouns:
-    def __init__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class add_question_word_if_no_pronouns(ConditionalHeuristic):
+    def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
         #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         
         # input: questions after the parse tree steps and before transformation
@@ -89,8 +64,8 @@ class add_question_word_if_no_pronouns:
         yield q
         
   # Heuristic 1 remove punctuation patterns at the beginning and the end of the question [" ' ( ) , .]
-class remove_regexp_patterns:
-    def __init__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class remove_regexp_patterns(ConditionalHeuristic):
+    def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
         #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         """
         Remove punctuation patterns at the beginning and the end of the question
@@ -102,8 +77,8 @@ class remove_regexp_patterns:
         yield question.replace("  ", "").strip()
 
   # Heuristic 2 -- name this answer type correction
-class imperative_to_question:
-    def __init__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class imperative_to_question(ConditionalHeuristic):
+    def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
         #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         """
         Convert "-- name this" patterns to "which"
@@ -138,8 +113,8 @@ class imperative_to_question:
               yield "%s is the %s" % (question_determiner, reduced)
 
   # Heuristic 3 semicolon
-class drop_after_punctuation:
-    def __init__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class drop_after_punctuation(ConditionalHeuristic):
+    def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
         #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         """
         Remove contents after semicolon in NQlike
@@ -151,8 +126,7 @@ class drop_after_punctuation:
     
   
   # Heuristic 5 remove repetition of the subject âis thisâ
-class count_num_of_verbs:
-    def __init__(self,text, strictly = False):
+def count_num_of_verbs(self,text, strictly = False):
         """
         count the number of verbs
         """
@@ -169,40 +143,44 @@ class count_num_of_verbs:
           num_of_verb = num_of_verb + counted[v]
         return num_of_verb
 
-  def remove_rep_subject(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class remove_rep_subject(ConditionalHeuristic):
+    def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
-    """
-    remove is this... pattern
-    """
-    to_clean = " is this [a-zA-Z]*\s"
-    if re.search(to_clean, question):
-      # the sentence has to have 1 verb at least otherwise this will not be done
-      if (self.count_num_of_verbs(question) > 1):
-        question = re.sub(to_clean, ' ', question)
-    yield question
+      """
+      remove is this... pattern
+      """
+      to_clean = " is this [a-zA-Z]*\s"
+      if re.search(to_clean, question):
+        # the sentence has to have 1 verb at least otherwise this will not be done
+        if (self.count_num_of_verbs(question) > 1):
+          question = re.sub(to_clean, ' ', question)
+      yield question
 
   # Heuristic 6 change be determiner to s possession
-  def remove_BE_determiner(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class remove_BE_determiner(ConditionalHeuristic):
+    def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
-    """
-    change is his/is her/is its to 's
-    """
-    to_clean = "( is his )|( is her )|( is its )"
-    if re.search(to_clean, question):
-      question = re.sub(to_clean, '\'s ', question)
-    yield question
+        """
+        change is his/is her/is its to 's
+        """
+        to_clean = "( is his )|( is her )|( is its )"
+        if re.search(to_clean, question):
+            question = re.sub(to_clean, '\'s ', question)
+        yield question
 
   # function to add space before punctuation
-  def add_space_before_punctuation(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
-    #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
-    """
-    add space before punctuation because in NQ there's space before all types of punctuation
-    """
-    tokens = self.current_analysis[question]["nltk_tokens"]
-    q = ' '.join(tokens)
-    yield q
+class add_space_before_punctuation(ConditionalHeuristic):
+    def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+       #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
+        """
+        add space before punctuation because in NQ there's space before all types of punctuation
+        """
+        tokens = self.current_analysis[question]["nltk_tokens"]
+        q = ' '.join(tokens)
+        yield q
 
-  def fix_no_verb(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class fix_no_verb(ConditionalHeuristic):
+  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     # -> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     if (self.count_num_of_verbs(question, True) == 0):
       tokens = self.current_analysis[question]["nltk_tokens"]
@@ -223,7 +201,8 @@ class count_num_of_verbs:
       yield question
 
   # Heuristic 8 remove repetitive be verb when there's more verbs
-  def remove_repeat_verb(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class remove_repeat_verb(ConditionalHeuristic):
+  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     remove is he/is she/is it
@@ -235,7 +214,8 @@ class count_num_of_verbs:
     yield question
 
   # Heuristic 9 First verb after which in continuous tense
-  def convert_continuous_to_present(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class convert_continuous_to_present(ConditionalHeuristic):
+  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     if the first verb is in continuous tense, change it to nomal
@@ -265,7 +245,8 @@ class count_num_of_verbs:
     yield question
 
   # Heuristic11 convert this to which
-  def no_wh_words(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class no_wh_words(ConditionalHeuristic):
+  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     result = question
     wh_words = self.wh_words
@@ -289,7 +270,8 @@ class count_num_of_verbs:
     yield result
 
   # Heuristic12
-  def replace_this_is(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class replace_this_is(ConditionalHeuristic):
+  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Replace 'this' to 'which'+answer_type within 'this is' pattern.
@@ -310,7 +292,8 @@ class count_num_of_verbs:
     yield question
 
   # Heuristic14: double auxiliary words
-  def remove_extra_AUX(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class remove_extra_AUX(ConditionalHeuristic):
+  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Remove extra auxiliary words.
@@ -338,7 +321,8 @@ class count_num_of_verbs:
     yield question
 
   # Heuristic15: WDT+BE patterns
-  def replace_which_with_this(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class replace_which_with_this(ConditionalHeuristic):
+  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Convert 'which' to 'that' and check if no 'which' present anymore, if so, convert 'this' to 'which'.
@@ -361,14 +345,16 @@ class count_num_of_verbs:
       question = result
     yield question
 
-  def rejoin_contractions(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class rejoin_contractions(ConditionalHeuristic):
+  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     # -> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     for separated, together in {"who 's": "whose", "ca n't": "can't", "wo n't": "won't"}.items():
       if separated in question:
         question = question.replace(separated, together)
     yield question
 
-  def split_conjunctions(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class split_conjunctions(ConditionalHeuristic):
+  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     # First, find the verbs 
     parse = self.current_analysis[question]["spacy"]
@@ -426,7 +412,8 @@ class count_num_of_verbs:
   # Heuristic16: 
   # WDT tag: which/what
   # WRB tag: where/why/when
-  def add_question_word(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class add_question_word(ConditionalHeuristic):
+  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Adding 'which+answer_type' at the beginning when no WDT/WRB present.
@@ -450,7 +437,8 @@ class count_num_of_verbs:
     yield question
 
   # Heuristic17: VERB/AUX at the beginning of the sample while missing the object
-  def add_subject(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class add_subject(ConditionalHeuristic):
+  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Adding 'which+answer_type' at the beginning when starting with VERB/AUX and missing the subject.
@@ -468,7 +456,8 @@ class count_num_of_verbs:
     yield question
 
   # Heuristic18: 'which none is' patterns
-  def which_none_is(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class which_none_is(ConditionalHeuristic):
+  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Convert 'which none is' to 'what is'.
@@ -486,7 +475,8 @@ class count_num_of_verbs:
     yield question
 
   # Heuristic19: 'what is which' pattern
-  def what_is_which(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+class what_is_which(ConditionalHeuristic):
+  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Remove "what is" from "what is which".
@@ -497,125 +487,3 @@ class count_num_of_verbs:
       result = re.sub('what is which', 'which', x)
       question = result
     yield question
-
-  def cache_analysis(self, question, verbose=False):
-    """
-    Parse the sentence for downstream heuristics.  This prevents repeated computation in each of the heuristics.
-    """
-    tokens = nltk.word_tokenize(question.lower())
-    text = nltk.Text(tokens)
-    tagged = nltk.pos_tag(text)
-
-    spacy_parse = nlp(question)
-    if verbose:
-      for ii in spacy_parse.sents:
-        logging.debug(to_nltk_tree(ii.root))
-          
-    self.current_analysis[question] = {"spacy": spacy_parse, "nltk_tokens": tokens, "nltk_tags": tagged}
-
-    
-  def __call__(self, qb_id, answer, chunk_id, question, lexical_answer_phrase, question_determiner, suppress_errors=False):
-    self.current_analysis = {}
-    finished = set()
-    applied_transformations = []
-    self.cache_analysis(question)
-
-    while len(finished) < len(self.current_analysis):
-      unchecked = [x for x in self.current_analysis if x not in finished]
-      for qq in unchecked:
-        assert not qq in finished
-        for method_name, replace in [("split_conjunctions", False),
-                                     ("imperative_to_question", True),                              
-                                     ("remove_regexp_patterns", False),
-                                     ("drop_after_punctuation", False),
-                                     ("convert_continuous_to_present", False),
-                                     ("no_wh_words", False),
-                                     ("replace_this_is", False),
-                                     ("replace_which_with_this", False),
-                                     # "add_question_word",
-                                     # "add_subject",
-                                     ("which_none_is", False),
-                                     ("what_is_which", True),
-                                     # "remove_extra_AUX",
-                                     ("remove_rep_subject", True),
-                                     ("remove_BE_determiner", True),
-                            # "fix_no_verb",
-                                     ("add_space_before_punctuation", True),
-                                     ("rejoin_contractions", True)]:
-          method = getattr(self, method_name)
-
-          if suppress_errors:
-            try:
-              results = method(qb_id, qq, lexical_answer_phrase, question_determiner)
-            except Exception as exc:
-              logging.error(traceback.format_exc())
-              logging.error(exc)
-              results = []
-              continue  
-          else:
-            results = method(qb_id, qq, lexical_answer_phrase, question_determiner)
-
-          for new_question in results:
-              if new_question != qq:
-                logging.debug("Adding new question [%s]: %s" % (method_name, new_question))
-
-                row = {}
-                row["qanta_id"] = qb_id
-                row["original"] = question
-                row["answer"] = answer
-                row["parent"] = qq
-                row["chunk_id"] = chunk_id
-                row["question"] = new_question.lower()
-                row["transform"] = method_name
-                applied_transformations.append(row)
-                
-                self.cache_analysis(new_question)
-
-          if replace:
-            finished.add(qq)
-
-
-    self.current_analysis = None
-    return applied_transformations
-
-
-if __name__ == "__main__":
-  parser = argparse.ArgumentParser(description="Demo heuristic functions")
-  parser.add_argument('--qb_path', type=str,
-                      default='qanta.train.2021.12.20.json',
-                      help="path of the qb dataset")
-  parser.add_argument('--config_file', type=str, default='config.json',
-                      help="File with data that configures extraction")
-
-  args = parser.parse_args()
-  # Load dataset
-
-  with open(args.config_file) as json_file:
-    config = json.load(json_file)
-  
-  heuristics = HeuristicsTransformer(config, {0: "character", 1: "thing", 94: "ruler", 102: "novel", 104: "organ"})
-  logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
-
-  for qid, example in [(102, "An automobile in what novel was purchased in Fuller by Bessie for her marriage to 16-year - old Dude , and led to the death of both an African - American man and Grandmother Lester ."),
-                       (94, "He demanded compensation for the family of Jacob Kaiser and forced another group to end its alliance with Austria in an armistice that he negotiated to end a war in which no battles occurred."),
-                       (0, ' what character is first encountered in the Spouter - Inn where the landlord thinks he may be late because " he ca n\'t sell his head , " and his coffin helps save the narrator after the ship he \'s on sinks . \xa0'),
-                       (19, "The protagonist of one of who 's works gives a jar to his friend instead of repaying a loan , and later dies after embezzling money in an attempt to buy out a courtesan 's contract ."),
-                           (1, "'!$  % ##@# @@# ftp FTP ftp--- For 10 points, for 10 points , For 10 points --- for 20 points: for 10 points--this is a real, legit question !@#!@@#@%%%....?"),
-                           (104, "For 10 points , name this organ , home to the islets of Langerhans ."),
-                           (8, "For 10 points , identify this French government that succeeded the Second Empire ."),
-                           (98, "For 10 points , identify this Sanskrit - language author of \" The Cloud Messenger \" and The Recognition of Shakuntala ."),
-                           (59, "For 10 points , name this mortal lover of Zeus and mother of Dionysus ."),
-                           (20, "For 10 points , name this Italian author of The Name of the Rose and Foucault 's Pendulum ."),
-                           (17, "For 10 points , name this country , the home of the director of The Seventh Seal , Ingmar Bergman ."),
-                           (119, "For 10 points , name this 1859 essay condemning infringements on personal freedom , written by John Stuart Mill ."),
-                           (378, "Beginning with \" April is the cruellest month \" , for 10 points , name this long poem in five sections by T.S. Eliot ."),
-                           (361,  " who asserted \" the air is a spongy body / a promiscuous faceless being \" in \" The Balcony \" and asked \" Do I believe in man / or in the stars ? \" in another poem .")]:
-
-      transformations = heuristics(qid, "??", 0, example, "what thing", "what")
-      for transform in transformations:
-        logging.debug("===============================")
-        logging.debug(transform["original"])
-        logging.debug(transform["parent"])
-        logging.debug(transform["transform"])           
-        logging.debug(transform["question"])
-    
