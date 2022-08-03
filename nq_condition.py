@@ -476,7 +476,7 @@ class which_none_is(ConditionalHeuristic):
 
   # Heuristic19: 'what is which' pattern
 class what_is_which(ConditionalHeuristic):
-  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+  def __call__ (self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
     Remove "what is" from "what is which".
