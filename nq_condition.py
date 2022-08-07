@@ -21,7 +21,7 @@ class add_question_word_if_no_pronouns(ConditionalHeuristic):
         #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         
         # input: questions after the parse tree steps and before transformation
-        q = question[0].lower()+question[1:]
+        q =  question[0].lower()+question[1:]
     
         question_test = self.current_analysis[question]["spacy"]
         pronouns_tags = {"PRON", "WDT", "WP", "WP$", "WRB", "VEZ"}
