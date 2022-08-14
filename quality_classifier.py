@@ -350,7 +350,7 @@ class Classifier:
     feature_weight["BIAS"] = model.intercept_[0]
     return feature_weight
 
-  def save_dictionary(self, questions, file_path):   
+  def save_dictionary(self, questions, file_path, model):   #add argument "model" 
     x = self.prepare_features(questions)
     results = model.predict_proba(x)
 
@@ -394,7 +394,7 @@ if __name__=="__main__":
   parser.add_argument('--nq_data', type=str, default='TriviaQuestion2NQ_Transform_Dataset/NaturalQuestions_train_reformatted.json')
   parser.add_argument('--nqlike_data', type=str, default='intermediate_results/nqlike_train.json')  
   parser.add_argument('--max_term_features', type=int, default=50)
-  parser.add_argument('--seq', type=str, default='')
+  parser.add_argument('--seq', type=str, default='nq_like')
   args = parser.parse_args()
 	# set flag and if_qb_last_sent here
 	# 0 --wellformedness accuracy output
@@ -422,5 +422,5 @@ if __name__=="__main__":
   if args.predictions:
 		# test
     print('Evaluate NQ-like')
-    c.save_dictionary(nq_like, prediction_path)
+    c.save_dictionary(nq_like, prediction_path, model) 
     

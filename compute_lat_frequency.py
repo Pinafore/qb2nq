@@ -46,7 +46,7 @@ class LatFrequencyComputer:
         text = qb_data[i]['text']
         lats = self.count_answer_types(Question(qid, page, text))
         # Printing here could cause unicode conversion error ifpage is not pure ASCII
-        if i % 10000 == 0:
+        if i % 100 == 0:
           print("===> %i/%i: %s %s" % (i, len(qb_data), page, str(lats)))
         if limit > 0 and i > limit:
           break
@@ -73,6 +73,9 @@ class LatFrequencyComputer:
         page_to_most_freq_answer_type_dict[qb_data[i]['qanta_id']] = self.most_common(qb_data[i]['page'])
 
     #save the most freq answer type for each qid into dictionary
+    if not os.path.exists(output_file): # create path if it doesn't exist
+      os.makedirs(output_file)
+      os.chmod(output_file, mode=0o777) # edit the permission
     with open(output_file, 'w') as fp:
       json.dump(page_to_most_freq_answer_type_dict, fp, indent=2)
 
@@ -84,7 +87,6 @@ if __name__ == "__main__":
                       default='qanta.train.2018.04.18.json',
                       help="path of the qb dataset")
   args = parser.parse_args()
-  
   # load configuration 
   lat_freq_calculator = LatFrequencyComputer()
   lat_freq_calculator.compute_lat_frequency(args.qb_path, limit=args.limit)
