@@ -1,6 +1,4 @@
 spacy==2.1.0
 neuralcoref
 matplotlib
-nltk
 sklearn
-genism
