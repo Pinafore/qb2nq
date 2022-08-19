@@ -84,6 +84,7 @@ if __name__ == "__main__":
                       default='qanta.train.2018.04.18.json',
                       help="path of the qb dataset")
   args = parser.parse_args()
+  
   # load configuration 
   lat_freq_calculator = LatFrequencyComputer()
   lat_freq_calculator.compute_lat_frequency(args.qb_path, limit=args.limit)
