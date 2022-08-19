@@ -1,4 +1,4 @@
-
+import re
 class ConditionalHeuristic:
   def __init__(self, analysis):
     self.current_analysis = {}
@@ -18,10 +18,11 @@ def to_nltk_tree(node):
 
 class add_question_word_if_no_pronouns(ConditionalHeuristic):
     def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+        print ("Hello")
         #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         
         # input: questions after the parse tree steps and before transformation
-        q =  question[0].lower()+question[1:]
+        q = question[0].lower()+question[1:]
     
         question_test = self.current_analysis[question]["spacy"]
         pronouns_tags = {"PRON", "WDT", "WP", "WP$", "WRB", "VEZ"}
@@ -114,15 +115,26 @@ class imperative_to_question(ConditionalHeuristic):
 
   # Heuristic 3 semicolon
 class drop_after_punctuation(ConditionalHeuristic):
+    def precondition(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+      for pattern in [re.compile("[;,!?.].*$"), re.compile("^[;,!?.].*")]:
+          if pattern.search(question):
+            return True
+          else:
+            return False
     def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
         #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         """
         Remove contents after semicolon in NQlike
         """
-        for pattern in [re.compile("[;,!?.].*$"), re.compile("^[;,!?.].*")]:
+        flag=self.precondition(qb_id,question,lexical_answer_type,question_determiner)
+        if flag==True:
+          for pattern in [re.compile("[;,!?.].*$"), re.compile("^[;,!?.].*")]:
+            question = pattern.sub('', question)
+        yield question
+        """for pattern in [re.compile("[;,!?.].*$"), re.compile("^[;,!?.].*")]:
           if pattern.search(question):
             question = pattern.sub('', question)
-            yield question
+            yield question"""
     
   
   # Heuristic 5 remove repetition of the subject âis thisâ
@@ -358,7 +370,7 @@ class split_conjunctions(ConditionalHeuristic):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     # First, find the verbs 
     parse = self.current_analysis[question]["spacy"]
-    
+    print("printing",parse)
     root_verb = [x for x in parse if x.pos_ == "VERB" and not any(1 for _ in x.ancestors)]
     verbs = [x for x in parse if x.pos_ == "VERB" and x.head in root_verb]
 
