@@ -73,9 +73,6 @@ class LatFrequencyComputer:
         page_to_most_freq_answer_type_dict[qb_data[i]['qanta_id']] = self.most_common(qb_data[i]['page'])
 
     #save the most freq answer type for each qid into dictionary
-    if not os.path.exists(output_file): # create path if it doesn't exist
-      os.makedirs(output_file)
-      os.chmod(output_file, mode=0o777) # edit the permission
     with open(output_file, 'w') as fp:
       json.dump(page_to_most_freq_answer_type_dict, fp, indent=2)
 
