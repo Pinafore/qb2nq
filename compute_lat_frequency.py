@@ -46,7 +46,7 @@ class LatFrequencyComputer:
         text = qb_data[i]['text']
         lats = self.count_answer_types(Question(qid, page, text))
         # Printing here could cause unicode conversion error ifpage is not pure ASCII
-        if i % 100 == 0:
+        if i % 10000 == 0:
           print("===> %i/%i: %s %s" % (i, len(qb_data), page, str(lats)))
         if limit > 0 and i > limit:
           break
