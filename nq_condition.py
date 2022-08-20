@@ -1,8 +1,11 @@
 import re
+import logging
+
 class ConditionalHeuristic:
-  def __init__(self, analysis):
-    self.current_analysis = {}
+  def __init__(self, name, config):
     self.replace = True
+    self.name = name
+    self.current_analysis = {}
   
   def precondition(self, question):
     return True
@@ -10,6 +13,9 @@ class ConditionalHeuristic:
   def postcondition(self, question):
     return True
 
+  def add_analysis(self, question, parses):
+      self.current_analysis[question] = parses
+      
 def to_nltk_tree(node):
     if node.n_lefts + node.n_rights > 0:
         return Tree(node.orth_, [to_nltk_tree(child) for child in node.children])
@@ -66,6 +72,11 @@ class add_question_word_if_no_pronouns(ConditionalHeuristic):
         
   # Heuristic 1 remove punctuation patterns at the beginning and the end of the question [" ' ( ) , .]
 class remove_regexp_patterns(ConditionalHeuristic):
+    def __init__(self, name, config, replace=True):
+        # TODO(jbg): Make OOP inheritance actually work
+        ConditionalHeuristic.__init__(name, config, replace)
+        self.regexp_trims = dict((re.compile(x), y) for x, y in config["remove_dict"].items())
+    
     def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
         #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         """
@@ -79,6 +90,11 @@ class remove_regexp_patterns(ConditionalHeuristic):
 
   # Heuristic 2 -- name this answer type correction
 class imperative_to_question(ConditionalHeuristic):
+    def __init__(self, name, config, replace=True):
+        # TODO(jbg): Make OOP inheritance actually work
+        ConditionalHeuristic.__init__(name, config, replace)
+        self.imperative_pattern = {re.compile(x) for x in config["imperative"]}
+    
     def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
         #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         """
@@ -137,23 +153,6 @@ class drop_after_punctuation(ConditionalHeuristic):
             yield question"""
     
   
-  # Heuristic 5 remove repetition of the subject âis thisâ
-def count_num_of_verbs(self,text, strictly = False):
-        """
-        count the number of verbs
-        """
-        verb_tags = []
-        if strictly:
-          verb_tags = self.strictly_valid_verbs
-        else:
-          verb_tags = self.valid_verbs
-        tokens = self.current_analysis[text]["nltk_tokens"]
-        tagged = self.current_analysis[text]["nltk_tags"]
-        counted = Counter(tag for word,tag in tagged)
-        num_of_verb = 0
-        for v in verb_tags:
-          num_of_verb = num_of_verb + counted[v]
-        return num_of_verb
 
 class remove_rep_subject(ConditionalHeuristic):
     def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
@@ -214,6 +213,29 @@ class fix_no_verb(ConditionalHeuristic):
 
   # Heuristic 8 remove repetitive be verb when there's more verbs
 class remove_repeat_verb(ConditionalHeuristic):
+  def count_num_of_verbs(self,text, strictly = False):
+        """
+        count the number of verbs
+        """
+        verb_tags = []
+        if strictly:
+          verb_tags = self.strictly_valid_verbs
+        else:
+          verb_tags = self.valid_verbs
+        tokens = self.current_analysis[text]["nltk_tokens"]
+        tagged = self.current_analysis[text]["nltk_tags"]
+        counted = Counter(tag for word,tag in tagged)
+        num_of_verb = 0
+        for v in verb_tags:
+          num_of_verb = num_of_verb + counted[v]
+        return num_of_verb
+
+    def __init__(self, name, config, replace=True):
+        # TODO(jbg): Make OOP inheritance actually work
+        ConditionalHeuristic.__init__(name, config, replace)
+        self.strictly_valid_verbs = config["strictly_valid_verbs"]        
+        self.valid_verbs = config["valid_verbs"]
+  
   def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
@@ -227,6 +249,8 @@ class remove_repeat_verb(ConditionalHeuristic):
 
   # Heuristic 9 First verb after which in continuous tense
 class convert_continuous_to_present(ConditionalHeuristic):
+  # Heuristic 5 remove repetition of the subject âis thisâ
+  
   def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     """
@@ -258,6 +282,12 @@ class convert_continuous_to_present(ConditionalHeuristic):
 
   # Heuristic11 convert this to which
 class no_wh_words(ConditionalHeuristic):
+    def __init__(self, name, config, replace=True):
+        # TODO(jbg): Make OOP inheritance actually work
+        ConditionalHeuristic.__init__(name, config, replace)
+        self.imperative_pattern = {re.compile(x) for x in config["imperative"]}
+
+  
   def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     result = question
@@ -368,9 +398,13 @@ class rejoin_contractions(ConditionalHeuristic):
 class split_conjunctions(ConditionalHeuristic):
   def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
-    # First, find the verbs 
+    # First, find the verbs
+
+    if question not in self.current_analysis:
+      logging.error("Question [%s] missing from cache current keys: [%s]" % (question[:25], ",".join(x[:25] for x in self.current_analys)))
+
     parse = self.current_analysis[question]["spacy"]
-    print("printing",parse)
+    
     root_verb = [x for x in parse if x.pos_ == "VERB" and not any(1 for _ in x.ancestors)]
     verbs = [x for x in parse if x.pos_ == "VERB" and x.head in root_verb]
 
@@ -409,16 +443,6 @@ class split_conjunctions(ConditionalHeuristic):
         yield " ".join(x.text for x in left_tokens + first_verb)
         yield " ".join(x.text for x in left_tokens + second_verb)
                                               
-          
-          
-        
-      
-          
-
-    # If there are nouns and verbs on both sides of it, the just iterate on those
-
-
-    # If there are only verbs, duplicate the subject
     None
     
   # Heuristic16: 

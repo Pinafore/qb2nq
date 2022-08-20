@@ -23,31 +23,23 @@ nlp = spacy.load('en_core_web_sm')
 class HeuristicsTransformer:
   def __init__(self, config, lat_lookup):
     self.current_analysis = {}    
-    self.valid_verbs = config["valid_verbs"]
-    self.wh_words = config["wh_words"]
-    self.strictly_valid_verbs = config["strictly_valid_verbs"]
-    self.to_trim = config["to_trim"]
-    self.pos_pronouns = config["pos_pronouns"]
-    self.pronouns = config["pronouns"]
-    self.imperative_pattern = {re.compile(x) for x in config["imperative"]}
-    self.regexp_trims = dict((re.compile(x), y) for x, y in config["remove_dict"].items())
-    self.non_last_sent_transform_dict = config["non_last_sent_transform_dict"]
+
     self.answer_type_dict = lat_lookup
 
-    self.heuristics_ = [split_conjunctions(self.current_analysis),
-                          imperative_to_question(self.current_analysis),
-                          remove_regexp_patterns(self.current_analysis),
-                          drop_after_punctuation(self.current_analysis),
-                          convert_continuous_to_present(self.current_analysis),
-                          no_wh_words(self.current_analysis),
-                          replace_this_is(self.current_analysis),
-                          replace_which_with_this(self.current_analysis),
-                          which_none_is(self.current_analysis),
-                          what_is_which(self.current_analysis),
-                          remove_rep_subject(self.current_analysis),
-                          remove_BE_determiner(self.current_analysis),
-                          add_space_before_punctuation(self.current_analysis),
-                          rejoin_contractions(self.current_analysis)]
+    self.heuristics_ = [split_conjunctions("Split Connjunctions", config),
+                          imperative_to_question("Imperative to Question", config),
+                          remove_regexp_patterns("Remove Regexp", config),
+                          drop_after_punctuation("Drop After Punc", config),
+                          convert_continuous_to_present("Current Analysis", config),
+                          no_wh_words("No WH words", config),
+                          replace_this_is("Replace this is", config),
+                          replace_which_with_this("Which with this", config),
+                          which_none_is("Which none is", config),
+                          what_is_which("What is which", config),
+                          remove_rep_subject("Remove rep subject", config),
+                          remove_BE_determiner("Remove be determiner", config),
+                          add_space_before_punctuation("Space before punc", config),
+                          rejoin_contractions("Rejoin conjunctions", config)]
 
   def cache_analysis(self, question, verbose=False):
     """
@@ -65,13 +57,12 @@ class HeuristicsTransformer:
     parses = {"spacy": spacy_parse, "nltk_tokens": tokens, "nltk_tags": tagged}
     self.current_analysis[question] = parses
     for ii in self.heuristics_:
-      ii.current_analysis[question] = parses
+      ii.add_analysis(question, parses)
 
     
   def __call__(self, qb_id, answer, chunk_id, question, lexical_answer_phrase, question_determiner, suppress_errors=False):
     self.current_analysis = {}
-    for ii in self.heuristics_:
-      ii.current_analysis = {}
+    self.cache_analysis(question)
 
     finished = set()
     applied_transformations = []
@@ -81,6 +72,7 @@ class HeuristicsTransformer:
       for qq in unchecked:
         assert not qq in finished
         for method in self.heuristics_:
+          logging.debug("Applying method %s" % method.name)
           if suppress_errors:
             try:
               results = method(qb_id, qq, lexical_answer_phrase, question_determiner)
@@ -95,6 +87,7 @@ class HeuristicsTransformer:
           for new_question in results:
               if new_question != qq:
                 logging.debug("Adding new question [%s]: %s" % (method_name, new_question))
+                self.cache_analysis(new_question)
 
                 row = {}
                 row["qanta_id"] = qb_id
