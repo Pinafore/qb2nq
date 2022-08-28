@@ -6,7 +6,7 @@ class ConditionalHeuristic:
       config = json.load(json_file)
     self.current_analysis = {}
     self.replace = True
-    self.valid_verbs = config["valid_verbs"]
+    self.valid_verbs =  config["valid_verbs"]
     #print(self.valid_verbs)
     self.wh_words = config["wh_words"]
     #print(self.wh_words)
