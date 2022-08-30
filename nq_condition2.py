@@ -1,12 +1,23 @@
 import re
 import json
+
+import language_tool_python
+def syntax_checker(text:str):
+  flag=False
+  tool = language_tool_python.LanguageTool('en-US')
+  matches = tool.check(text)
+  print(len(matches))
+  if (len(matches)==0):
+    flag=True
+  return flag
+
 class ConditionalHeuristic:
   def __init__(self, analysis):
     with open("config.json") as json_file:
       config = json.load(json_file)
     self.current_analysis = {}
     self.replace = True
-    self.valid_verbs =  config["valid_verbs"]
+    self.valid_verbs = config["valid_verbs"]
     #print(self.valid_verbs)
     self.wh_words = config["wh_words"]
     #print(self.wh_words)
@@ -82,14 +93,18 @@ class add_question_word_if_no_pronouns(ConditionalHeuristic):
         
   # Heuristic 1 remove punctuation patterns at the beginning and the end of the question [" ' ( ) , .]
 class remove_regexp_patterns(ConditionalHeuristic):
+    def precondition(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+      for pattern, replacement in self.regexp_trims.items():
+          question = pattern.sub(replacement, question)
     def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
         #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         """
         Remove punctuation patterns at the beginning and the end of the question
         """
-    
         question = question
+        print("loop items: ",self.regexp_trims.items())
         for pattern, replacement in self.regexp_trims.items():
+          print("pattern ",pattern," and replacement",replacement)
           question = pattern.sub(replacement, question)
         yield question.replace("  ", "").strip()
 
@@ -192,20 +207,36 @@ def count_num_of_verbs(self,text, strictly = False):
         return num_of_verb
 
 class remove_rep_subject(ConditionalHeuristic):
+    def precondition(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+      to_clean = " is this [a-zA-Z]*\s"
+      if re.search(to_clean, question):
+        # the sentence has to have 1 verb at least otherwise this will not be done
+        if (self.count_num_of_verbs(question) > 1):
+          return True
+        else:
+          return False
     def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
       """
       remove is this... pattern
       """
-      to_clean = " is this [a-zA-Z]*\s"
-      if re.search(to_clean, question):
-        # the sentence has to have 1 verb at least otherwise this will not be done
-        if (self.count_num_of_verbs(question) > 1):
-          question = re.sub(to_clean, ' ', question)
+      flag=self.precondition(qb_id,question,lexical_answer_type,question_determiner)
+      if flag==True:
+        to_clean = " is this [a-zA-Z]*\s"
+        if re.search(to_clean, question):
+          # the sentence has to have 1 verb at least otherwise this will not be done
+          if (self.count_num_of_verbs(question) > 1):
+            question = re.sub(to_clean, ' ', question)
       yield question
 
   # Heuristic 6 change be determiner to s possession
 class remove_BE_determiner(ConditionalHeuristic):
+    def precondition(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+      to_clean = "( is his )|( is her )|( is its )"
+      if re.search(to_clean, question):
+        return True
+      else:
+        return False
     def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         """
@@ -223,8 +254,10 @@ class add_space_before_punctuation(ConditionalHeuristic):
         """
         add space before punctuation because in NQ there's space before all types of punctuation
         """
+        print("before:",question)
         tokens = self.current_analysis[question]["nltk_tokens"]
-        q = ' '.join(tokens)
+        q = " ".join(tokens)
+        print("after:",q)
         yield q
 
 class fix_no_verb(ConditionalHeuristic):
