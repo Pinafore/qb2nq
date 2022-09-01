@@ -439,9 +439,11 @@ class split_conjunctions(ConditionalHeuristic):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     # First, find the verbs 
     parse = self.current_analysis[question]["spacy"]
-    print("printing",parse)
+    print("printing: ",parse)
     root_verb = [x for x in parse if x.pos_ == "VERB" and not any(1 for _ in x.ancestors)]
+    print("root verb: ",root_verb)
     verbs = [x for x in parse if x.pos_ == "VERB" and x.head in root_verb]
+    print("verbs: ",verbs)
 
     # See if they have any coordinating conjunctions as dependents
     verb_conj = set()
