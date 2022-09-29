@@ -4,7 +4,7 @@ import json
 import language_tool_python
 def syntax_checker(text:str):
   flag=False
-  tool = language_tool_python.LanguageTool('en-US')
+  tool = language_tool_python.LanguageTool ('en-US')
   matches =  tool.check(text)
   print(len(matches))
   if (len(matches)==0):
