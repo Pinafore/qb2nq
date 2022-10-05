@@ -1,15 +1,10 @@
 import re
 import json
+from nltk.tokenize import word_tokenize
+from nltk.corpus import wordnet as wn
+import logging
+from syntax import syntax_checker
 
-import language_tool_python
-def syntax_checker(text:str):
-  flag=False
-  tool = language_tool_python.LanguageTool ('en-US')
-  matches =  tool.check(text)
-  print(len(matches))
-  if (len(matches)==0):
-    flag=True
-  return flag
 
 class ConditionalHeuristic:
   def __init__(self, analysis):
@@ -18,11 +13,11 @@ class ConditionalHeuristic:
     self.current_analysis = {}
     self.replace = True
     self.valid_verbs = config["valid_verbs"]
-    #print(self.valid_verbs)
+    ##print(self.valid_verbs)
     self.wh_words = config["wh_words"]
-    #print(self.wh_words)
+    ##print(self.wh_words)
     self.strictly_valid_verbs = config["strictly_valid_verbs"]
-    #print(self.strictly_valid_verbs)
+    ##print(self.strictly_valid_verbs)
     self.to_trim = config["to_trim"]
     self.pos_pronouns = config["pos_pronouns"]
     self.pronouns = config["pronouns"]
@@ -44,8 +39,10 @@ def to_nltk_tree(node):
         return node.orth_
 
 class add_question_word_if_no_pronouns(ConditionalHeuristic):
+    def precondition(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+      return True
     def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
-        print ("Hello",lexical_answer_type)
+        #print ("Hello",lexical_answer_type)
         #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         
         # input: questions after the parse tree steps and before transformation
@@ -102,15 +99,22 @@ class remove_regexp_patterns(ConditionalHeuristic):
         Remove punctuation patterns at the beginning and the end of the question
         """
         question = question
-        print("loop items: ",self.regexp_trims.items())
+        #print("loop items: ",self.regexp_trims.items())
         for pattern, replacement in self.regexp_trims.items():
-          print("pattern ",pattern," and replacement",replacement)
+          #print("pattern ",pattern," and replacement",replacement)
           question = pattern.sub(replacement, question)
-        yield question.replace("  ", "").strip()
-
+        prev=question.replace("  ", "").strip()
+        final_q=self.postcondition(prev)
+        yield final_q
+    
+    def postcondition(self,question):
+      len=syntax_checker(question)
+      #print("length of syntax check: ",len)
+      return len
   # Heuristic 2 -- name this answer type correction
 class imperative_to_question(ConditionalHeuristic):
     def precondition(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+      #print("imperative",self.imperative_pattern)
       for pattern in self.imperative_pattern:
           if pattern.search(question):
             return True
@@ -120,17 +124,24 @@ class imperative_to_question(ConditionalHeuristic):
         """
         Convert "-- name this" patterns to "which"
         """
+        print("Heuristic 2: Imperative to question")
         flag=self.precondition(qb_id,question,lexical_answer_type,question_determiner)
         if flag==True:
           for pattern in self.imperative_pattern:
             if pattern.search(question):
               parse = self.current_analysis[question]["spacy"]
-              print("parse",parse)
+              #print("parse",parse)
               # find the mention, the first noun after identify, name, or give
+              begin_word=min(x.i for x in parse if x.text.lower() in self.imperative_pattern)
+              print("begin word",begin_word)
               verb_position = min(x.i for x in parse if x.text.lower() in ["name", "give", "identify"])
               print("verb postition: ",verb_position)
               mention = parse[verb_position + 1].head
               print("mention: ",mention)
+              print("length: ",len(parse))
+              print("mention+1: ",mention.i + 1)
+              print("next: ",parse[mention.i + 1].text)
+              #len(parse) > mention.i + 1 and parse[mention.i + 1].text == ','
               
               # is there a relative clause or an appositive?
               if 'relcl' in [x.dep_ for x in mention.children]:
@@ -139,36 +150,68 @@ class imperative_to_question(ConditionalHeuristic):
                 for x in child:
                   print("child",x)
                   print("x_dep::: ",x.dep_)
-                #print("x_dep",(x.dep_ for x in mention.children))
+                print("x_dep",(x.dep_ for x in mention.children))
                 relative_head = [x for x in mention.children if x.dep_ == "relcl"]
                 print("relative head",relative_head)
                 if len(relative_head) > 1:
-                  print("len",len(relative_head))
+                  #print("len",len(relative_head))
                   logging.warn("Two relative clauses for an 'identify' construction, and we don't know how to handle that")
                   return
                 relative_head = relative_head[0]
                 continuation = " ".join(x.text for x in parse[relative_head.left_edge.i+1:relative_head.right_edge.i+1])
                 print("continution::",continuation)
                 print(question_determiner, " and lex",lexical_answer_type)
-                yield "%s %s %s" % (question_determiner, lexical_answer_type, continuation)
+                print("Before postcondition: ")
+                prev_q="%s %s" % (lexical_answer_type, continuation)
+                print(prev_q)
+                print("After postcondition")
+                final_q=self.postcondition(prev_q)
+                yield final_q
+                #yield "%s %s %s" % (question_determiner, lexical_answer_type, continuation)
               elif len(parse) > mention.i + 1 and parse[mention.i + 1].text == ',':
                 # If there is an appostive, then turn it into a question
+                continuation1="".join(x.text for x in parse[:(mention.i)])
+                print("first part",continuation1)
                 continuation = " ".join(x.text for x in parse[(mention.i + 2):])
-                yield "%s is %s" % (lexical_answer_type, continuation)   
+                print("conjunction: ",continuation)
+                print("lexical answer: ",lexical_answer_type)
+                prev_q="%s is %s" % (lexical_answer_type, continuation)  
+                print("Before precondition")
+                print(prev_q)
+                print("After postcondition") 
+                final_q=self.postcondition(prev_q)
+                yield final_q
+                #yield "%s is %s" % (lexical_answer_type, continuation)   
               else:
                 # If not, just cut the "For 10 ... points [name/identify]" and yield that
+                continuation1="".join(x.text for x in parse[:(mention.i)])
+                print("first part",continuation1)
+                print("Before precondition")
                 reduced = pattern.sub("", question).strip()
-                yield reduced
-      
+                print(reduced)
+                print("After postcondition")
+                final_q=self.postcondition(reduced)
+                yield final_q
+                #yield reduced
+                print("Before precondition")
+                prev_q="%s is the %s" % (question_determiner, reduced)
+                print(prev_q)
+                print("After postcondition")
+                final_q=self.postcondition(prev_q)
+                yield final_q
                 # and the question version
-                yield "%s is the %s" % (question_determiner, reduced)
-
+                #yield "%s is the %s" % (question_determiner, reduced)
+    def postcondition(self,question):
+      len=syntax_checker(question)
+      #print("length of syntax check: ",len)
+      return len
+      #return question
   # Heuristic 3 semicolon
 class drop_after_punctuation(ConditionalHeuristic):
     def precondition(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
       for pattern in [re.compile("[;,!?.].*$"), re.compile("^[;,!?.].*")]:
           if pattern.search(question):
-            print("patterns",pattern)
+            #print("patterns",pattern)
             return True
           else:
             return False
@@ -177,16 +220,21 @@ class drop_after_punctuation(ConditionalHeuristic):
         """
         Remove contents after semicolon in NQlike
         """
+        print("Drop after punctuation")
         flag=self.precondition(qb_id,question,lexical_answer_type,question_determiner)
         if flag==True:
           for pattern in [re.compile("[;,!?.].*$"), re.compile("^[;,!?.].*")]:
             question = pattern.sub('', question)
+        question=self.postcondition(question)
         yield question
         """for pattern in [re.compile("[;,!?.].*$"), re.compile("^[;,!?.].*")]:
           if pattern.search(question):
             question = pattern.sub('', question)
             yield question"""
-    
+    def postcondition(self,question):
+      len=syntax_checker(question)
+      #print("length of syntax check: ",len)
+      return len
   
   # Heuristic 5 remove repetition of the subject âis thisâ
 def count_num_of_verbs(self,text, strictly = False):
@@ -254,10 +302,10 @@ class add_space_before_punctuation(ConditionalHeuristic):
         """
         add space before punctuation because in NQ there's space before all types of punctuation
         """
-        print("before:",question)
+        #print("before:",question)
         tokens = self.current_analysis[question]["nltk_tokens"]
         q = " ".join(tokens)
-        print("after:",q)
+        #print("after:",q)
         yield q
 
 class fix_no_verb(ConditionalHeuristic):
@@ -304,6 +352,7 @@ class convert_continuous_to_present(ConditionalHeuristic):
     verb_tags = self.valid_verbs
     tokens = self.current_analysis[question]["nltk_tokens"]
     tagged = self.current_analysis[question]["nltk_tags"]
+    print("tokens: ",tokens," tagged: ",tagged)
 
     ind = 0
     for tk,tg in tagged:
@@ -311,9 +360,12 @@ class convert_continuous_to_present(ConditionalHeuristic):
         if tg == 'VBG':
           try:
             old_tk, old_tg = tagged[ind-1]
+            print("old_tk: ",old_tk, old_tg)
             if old_tg == 'NN' or old_tg == 'NNP':
               tokens[ind] = re.sub('ing','s',tokens[ind])
+              print("tokens[ind]",tokens[ind])
               question = ' '.join(tokens)
+              print("question",question)
             else:
               tokens[ind] = re.sub('ing','',tokens[ind])
               question = ' '.join(tokens)
@@ -345,8 +397,8 @@ class no_wh_words(ConditionalHeuristic):
               else:
                   result = 'which '+answer_type+' is '+question
       else:
-          if not qb_id in self.answer_type_dict:
-              logging.warn("Missing answer type %i" % qb_id)
+          #if not qb_id in self.answer_type_dict:
+              #logging.warn("Missing answer type %i" % qb_id)
           result = re.sub('this', 'which', question, 1)
     yield result
 
@@ -435,35 +487,79 @@ class rejoin_contractions(ConditionalHeuristic):
     yield question
 
 class split_conjunctions(ConditionalHeuristic):
-  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+  def precondition(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     # First, find the verbs 
     parse = self.current_analysis[question]["spacy"]
-    print("printing: ",parse)
-    root_verb = [x for x in parse if x.pos_ == "VERB" and not any(1 for _ in x.ancestors)]
-    print("root verb: ",root_verb)
+    #print("#printing: ",parse)
+    for i in parse:
+      if i.pos_ == "VERB":
+        #print("i",i)
+        a=(1 for _ in i.ancestors)
+        #for k in a:
+          #print("confused",k)
+        b=not any(a)
+        #print("b",b)
+        #for j in i.ancestors:
+          #print("ancestors: ",j)
+        #print("done #printing once")
+    
+    #a=x for x. in parse if x.pos_ == "VERB" and not any(1 for _ in x.ancestors)
+    ##print("ancestors",x for x in parse if x.pos_ == "VERB" and not any(1 for _ in x.ancestors))
+    """for x in parse:
+      print("\n",x," pos: ",x.pos_," ansce: ",end=" ")
+      for j in x.ancestors:
+        print(j,end=", ")"""
+    root_verb = [x for x in parse if x.pos_ == "VERB" and (not any(1 for _ in x.ancestors))]
+    print("\nroot verb: ",root_verb)
     verbs = [x for x in parse if x.pos_ == "VERB" and x.head in root_verb]
     print("verbs: ",verbs)
 
-    # See if they have any coordinating conjunctions as dependents
     verb_conj = set()
     for verb in verbs:
       for child in verb.children:
+        ##print("child before if: ",child)
         if child.dep_ == 'cc' and child.pos_ == "CCONJ":
+          ##print("verb: ",verb," and child: ",child)
           verb_conj.add((verb, child))
 
     if len(verb_conj) > 1:
       logging.warn("Multiple conjunctions in sentence and we don't know what to do: " + question)
-      return
-
+    return parse,root_verb,verbs,verb_conj
+  def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     # If so, then we need to know if they are independent clauses
+    print("Heuristic 1: Split Conjunctions")
+    parse,root_verb,verbs,verb_conj=self.precondition(qb_id,question,lexical_answer_type,question_determiner)
+    #return 
+    #parse = self.current_analysis[question]["spacy"]
+    ##print("#printing: ",parse)
+    #root_verb = [x for x in parse if x.pos_ == "VERB" and not any(1 for _ in x.ancestors)]
+    ##print("root verb: ",root_verb)
+    #verbs = [x for x in parse if x.pos_ == "VERB" and x.head in root_verb]
+    ##print("verbs: ",verbs)
+
+    # See if they have any coordinating conjunctions as dependents
+    
+      
     for verb, conj in verb_conj:
       # Check to see if this is the second verb and if it has no ancestors
       if verb.i > verbs[0].i and not any(1 for _ in verb.ancestors):
         # If so, we have two independent clauses, so yield the two
         # parts on either side of the conjunction
-        yield " ".join(x.text for x in parse if x.i < conj.i)
-        yield " ".join(x.text for x in parse if x.i > conj.i)
+        first_q=" ".join(x.text for x in parse if x.i < conj.i)
+        print("Before postcondition: ")
+        print(first_q)
+        final_first_q=self.postcondition(first_q)
+        print("After postcondition: ")
+        yield final_first_q
+        #yield " ".join(x.text for x in parse if x.i < conj.i)
+        second_q=" ".join(x.text for x in parse if x.i > conj.i)
+        print("Before postcondition: ")
+        print(second_q)
+        final_second_q=self.postcondition(second_q)
+        print("After postcondition")
+        yield final_second_q
+        #yield " ".join(x.text for x in parse if x.i > conj.i)
       elif verb.i < verbs[-1].i and verbs[-1].dep_ == "conj":
         # Otherwise, if this verb is child of another verb with "conj"
         # relation, we can have two sentences with the same subject
@@ -477,24 +573,31 @@ class split_conjunctions(ConditionalHeuristic):
         second_verb = [x for x in parse if x.i > conj.i]
 
         # Return those
-        yield " ".join(x.text for x in left_tokens + first_verb)
-        yield " ".join(x.text for x in left_tokens + second_verb)
-                                              
-          
-          
-        
-      
-          
-
+        first_q=" ".join(x.text for x in left_tokens + first_verb)
+        print("Before postcondition: ")
+        print(first_q)
+        final_first_q=self.postcondition(first_q)
+        print("After postcondition")
+        yield final_first_q
+        #yield " ".join(x.text for x in left_tokens + first_verb)
+        second_q=" ".join(x.text for x in left_tokens + second_verb) 
+        print("Before postcondition: ")
+        print(second_q)
+        final_second_q=self.postcondition(second_q)
+        print("After postcondition")
+        yield final_second_q
+        #yield " ".join(x.text for x in left_tokens + second_verb) 
     # If there are nouns and verbs on both sides of it, the just iterate on those
-
-
     # If there are only verbs, duplicate the subject
     None
-    
   # Heuristic16: 
   # WDT tag: which/what
   # WRB tag: where/why/when
+  def postcondition(self,question):
+    len=syntax_checker(question)
+    #print("length of syntax check: ",len)
+    return len
+    
 class add_question_word(ConditionalHeuristic):
   def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
