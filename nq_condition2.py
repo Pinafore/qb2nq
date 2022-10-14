@@ -235,7 +235,7 @@ class imperative_to_question(ConditionalHeuristic):
                 print(reduced)
                 print("After postcondition")
                 final_q=self.postcondition(reduced)
-                yield final_q
+                #yield final_q
                 #yield reduced
                 print("Before precondition")
                 prev_q="%s is the %s" % (question_determiner, reduced)
@@ -287,7 +287,7 @@ class drop_after_punctuation(ConditionalHeuristic):
         question_after=question
         flag=self.precondition(qb_id,question,lexical_answer_type,question_determiner)
         if flag==True:
-          for pattern in [re.compile("[;,!?.].*$"), re.compile("^[;,!?.].*")]:
+          for pattern in [re.compile("[;,!?].*$"), re.compile("^[;,!?].*")]:
             question = pattern.sub('', question)
         print("question before precondition: ",question)
         question_final=self.postcondition(question_after,question)
@@ -297,11 +297,24 @@ class drop_after_punctuation(ConditionalHeuristic):
             question = pattern.sub('', question)
             yield question"""
     def postcondition(self,question,question_prev):
+      sent = nlp(question_prev)
+      has_noun = 1
+      has_verb = 1
+      for token in sent:
+        if token.pos_ in ["NOUN", "PROPN", "PRON"]:
+          has_noun -= 1
+        elif token.pos_ == "VERB":
+          has_verb -= 1
+      if has_noun >= 1 or has_verb >= 1:
+        print("check passed\n")
+        return question
       check2=is_quote_ok(question_prev)
       if check2==True:
         return syntax_checker(question_prev)
       else:
         return syntax_checker(question)
+
+
   
   # Heuristic 5 remove repetition of the subject âis thisâ
 def count_num_of_verbs(self,text, strictly = False):
@@ -582,10 +595,12 @@ class no_wh_words(ConditionalHeuristic):
         for i in fil:
           print("text: ",i.text," label ",i.label_)"""
         #print("labels: ",fil.label_)
+        n_flag=True
         for l in range (len(list(text.noun_chunks))):
           i=list(text.noun_chunks)[l]
-          #print("checking: ",i.text)
+          print("checking: ",i.text)
           if i.text.find("this")==0:
+            n_flag=False
             next=text[i.end].pos_
             next_dep=text[i.end].dep_
             #if next_tag=="prep"
@@ -603,8 +618,27 @@ class no_wh_words(ConditionalHeuristic):
                 replaced=i.text.replace("this","which")
                 replaced=replaced+" is "
               else:
+                print("Question here")
                 replaced=i.text.replace("this","which is")
               result = re.sub(i.text, replaced, question, 1)
+          if n_flag==True:
+            index=question.find("this")
+            if index!=-1:
+              result = re.sub('this', 'which', question, 1)
+            else:
+              parse = self.current_analysis[question]["spacy"]
+    
+              root_verb = [x for x in parse if x.pos_ == "VERB" and not any(1 for _ in x.ancestors)]
+              mod = [x for x in parse if x.pos_ == "NOUN" and x.head in root_verb and x.i<x.head.i]
+              mod2 = [x for x in parse if x.pos_ == "PRON" and x.head in root_verb and x.i<x.head.i]
+              for x in parse:
+                if x.pos_ == "PRON" and x.head in root_verb and x.i<x.head.i:
+                  result=question.replace(x.text,"what")
+                if x.pos_ == "NOUN" and x.head in root_verb and x.i<x.head.i:
+                  result=question.replace(x.text,"what")
+              print("list: ",mod," and ",mod2)
+
+
         print("Modified question: ",result)
         yield self.postcondition(result)
 
@@ -709,8 +743,11 @@ class replace_which_with_this(ConditionalHeuristic):
           which_rep=True
           #print("loc: ",token.i)
           for j in text.noun_chunks:
+            print(j.text)
             if token.i>=j.start and token.i<j.end:
               which_rep=False
+          if token.i==0:
+            which_rep=False
           if which_rep==True:
             question = re.sub('which', 'that', question)
             #print("phrase: ",j.text," start: ",j.start," and end of span: ",j.end)
@@ -749,151 +786,128 @@ class split_conjunctions(ConditionalHeuristic):
   def precondition(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     # First, find the verbs 
+    flag=False
     parse = self.current_analysis[question]["spacy"]
     for x in parse:
-      b=" "
-      for j in x.ancestors:
-        b=b+j.text+" "
-      #print("token: ",x.text," dependency: ",x.dep_," head: ",x.head," pos: ",x.pos_," tag: ",x.tag_," ancestors: ",b)
-    tagged = self.current_analysis[question]["nltk_tags"]
-    #print(tagged)
-    #print("#printing: ",parse)
-    for i in parse:
-      if i.pos_ == "VERB":
-        #print("i",i)
-        a=(1 for _ in i.ancestors)
-        #for k in a:
-          #print("confused",k)
-        b=not any(a)
-        #print("b",b)
-        #for j in i.ancestors:
-          #print("ancestors: ",j)
-        #print("done #printing once")
-    
-    #a=x for x. in parse if x.pos_ == "VERB" and not any(1 for _ in x.ancestors)
-    ##print("ancestors",x for x in parse if x.pos_ == "VERB" and not any(1 for _ in x.ancestors))
-    """for x in parse:
-      print("\n",x," pos: ",x.pos_," ansce: ",end=" ")
-      for j in x.ancestors:
-        print(j,end=", ")"""
-    root=[x for x in parse if (not any(1 for _ in x.ancestors))]
-
-    print("Finding root: ",root)
-    #parse2=parse.remove(root)
-    root_verb = [x for x in parse if x.pos_ == "VERB" and (not any(1 for _ in x.ancestors))]
-    for x in parse:
-      if x.pos_ == "VERB" and (not any(1 for _ in x.ancestors)):
-        root_verb=[x]
-        #verbs = [x for x in parse if x.pos_ == "VERB" and x.head in root_verb]
-      elif x.pos_ == "VERB" and (any(1 for _ in x.ancestors)):
-        flag_root=True
-        for y in x.ancestors:
-          if y.pos_=="VERB":
-            flag_root=False
-        if flag_root==True:
-          root_verb=[x]
-    flag_verb=False
-    for x in parse:
-      if x.dep_=="ROOT" and x.pos_=="VERB":
-        flag_verb=True
-    if flag_verb==True:
-      verbs = [x for x in parse if x.pos_ == "VERB" and x.head in root_verb]
-    else:
-        verbs=[]
-        verbs.append(root_verb[0])
-        verbs.extend([x for x in parse if x.pos_ == "VERB" and x.head in root_verb])
-        print("in first line verbs",verbs)
-
-
-      
-    #root_verb = [x for x in parse if x.pos_ == "VERB" and x.head.pos_!="VERB"]"""
-    print("\nroot verb: ",root_verb)
-    """for x in parse:
-      #print("x: ",x," pos ",x.pos_)
-      if x.pos_ == "VERB":
-        print("root: ",root_verb," x: ",x.head)
-    verbs = [x for x in parse if x.pos_ == "VERB" and x.head in root_verb]"""
-    print("verbs: ",verbs)
-
-    verb_conj = set()
-    for verb in verbs:
-      for child in verb.children:
-        ##print("child before if: ",child)
-        if child.dep_ == 'cc' and child.pos_ == "CCONJ":
-          ##print("verb: ",verb," and child: ",child)
-          verb_conj.add((verb, child))
-
-    if len(verb_conj) > 1:
-      logging.warn("Multiple conjunctions in sentence and we don't know what to do: " + question)
-    return parse,root_verb,verbs,verb_conj
+      #print(x," and pos: ",x.pos_)
+      if x.pos_=="CCONJ":
+        flag=True
+    return flag
   def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     # If so, then we need to know if they are independent clauses
     print("Heuristic 1: Split Conjunctions")
-    parse,root_verb,verbs,verb_conj=self.precondition(qb_id,question,lexical_answer_type,question_determiner)
-    #return 
-    #parse = self.current_analysis[question]["spacy"]
-    ##print("#printing: ",parse)
-    #root_verb = [x for x in parse if x.pos_ == "VERB" and not any(1 for _ in x.ancestors)]
-    ##print("root verb: ",root_verb)
-    #verbs = [x for x in parse if x.pos_ == "VERB" and x.head in root_verb]
-    ##print("verbs: ",verbs)
+    parse = self.current_analysis[question]["spacy"]
+    flag=self.precondition(qb_id,question,lexical_answer_type,question_determiner)
+    if flag==True:
+        tagged = self.current_analysis[question]["nltk_tags"]
+        root=[x for x in parse if (not any(1 for _ in x.ancestors))]
 
-    # See if they have any coordinating conjunctions as dependents
-    
-      
-    for verb, conj in verb_conj:
-      # Check to see if this is the second verb and if it has no ancestors
-      if verb.i > verbs[0].i and not any(1 for _ in verb.ancestors):
-        # If so, we have two independent clauses, so yield the two
-        # parts on either side of the conjunction
-        first_q=" ".join(x.text for x in parse if x.i < conj.i)
-        print("Before postcondition: ")
-        print(first_q)
-        final_first_q=self.postcondition(first_q)
-        print("After postcondition: ")
-        yield final_first_q
-        #yield " ".join(x.text for x in parse if x.i < conj.i)
-        second_q=" ".join(x.text for x in parse if x.i > conj.i)
-        print("Before postcondition: ")
-        print(second_q)
-        final_second_q=self.postcondition(second_q)
-        print("After postcondition")
-        yield final_second_q
-        #yield " ".join(x.text for x in parse if x.i > conj.i)
-      elif verb.i < verbs[-1].i and verbs[-1].dep_ == "conj":
-        # Otherwise, if this verb is child of another verb with "conj"
-        # relation, we can have two sentences with the same subject
+        print("Finding root: ",root)
+        #parse2=parse.remove(root)
+        root_verb = [x for x in parse if x.pos_ == "VERB" and (not any(1 for _ in x.ancestors))]
+        for x in parse:
+          if x.pos_ == "VERB" and (not any(1 for _ in x.ancestors)):
+            root_verb=[x]
+            #verbs = [x for x in parse if x.pos_ == "VERB" and x.head in root_verb]
+          elif x.pos_ == "VERB" and (any(1 for _ in x.ancestors)):
+            flag_root=True
+            for y in x.ancestors:
+              if y.pos_=="VERB":
+                flag_root=False
+            if flag_root==True:
+              root_verb=[x]
+        flag_verb=False
+        for x in parse:
+          if x.dep_=="ROOT" and x.pos_=="VERB":
+            flag_verb=True
+        if flag_verb==True:
+          verbs = [x for x in parse if x.pos_ == "VERB" and x.head in root_verb]
+        else:
+            verbs=[]
+            verbs.append(root_verb[0])
+            verbs.extend([x for x in parse if x.pos_ == "VERB" and x.head in root_verb])
 
-        # Get what came before verb and doesn't modify verb
-        left_tokens = [x for x in parse if x.i < verb.i and not
-                         (x.head == verb and (x.pos_ == "ADVERB" or x.pos_ == "AUX"))]
+        verb_conj = set()
+        for verb in verbs:
+          for child in verb.children:
+            ##print("child before if: ",child)
+            if child.dep_ == 'cc' and child.pos_ == "CCONJ":
+              ##print("verb: ",verb," and child: ",child)
+              verb_conj.add((verb, child))
 
-        # Get possible completions
-        first_verb = [x for x in parse if x.i < conj.i and not x in left_tokens]
-        second_verb = [x for x in parse if x.i > conj.i]
+        if len(verb_conj) > 1:
+          logging.warn("Multiple conjunctions in sentence and we don't know what to do: " + question)
+        
+        #return 
+        #parse = self.current_analysis[question]["spacy"]
+        ##print("#printing: ",parse)
+        #root_verb = [x for x in parse if x.pos_ == "VERB" and not any(1 for _ in x.ancestors)]
+        ##print("root verb: ",root_verb)
+        #verbs = [x for x in parse if x.pos_ == "VERB" and x.head in root_verb]
+        ##print("verbs: ",verbs)
 
-        # Return those
-        first_q=" ".join(x.text for x in left_tokens + first_verb)
-        print("Before postcondition: ")
-        print(first_q)
-        final_first_q=self.postcondition(first_q)
-        print("After postcondition")
-        yield final_first_q
-        #yield " ".join(x.text for x in left_tokens + first_verb)
-        second_q=" ".join(x.text for x in left_tokens + second_verb) 
-        print("Before postcondition: ")
-        print(second_q)
-        final_second_q=self.postcondition(second_q)
-        print("After postcondition")
-        yield final_second_q
-        #yield " ".join(x.text for x in left_tokens + second_verb) 
-    # If there are nouns and verbs on both sides of it, the just iterate on those
-    # If there are only verbs, duplicate the subject
-    None
-  # Heuristic16: 
-  # WDT tag: which/what
-  # WRB tag: where/why/when
+        # See if they have any coordinating conjunctions as dependents
+        
+          
+        for verb, conj in verb_conj:
+          # Check to see if this is the second verb and if it has no ancestors
+          if verb.i > verbs[0].i and not any(1 for _ in verb.ancestors):
+            # If so, we have two independent clauses, so yield the two
+            # parts on either side of the conjunction
+            first_q=" ".join(x.text for x in parse if x.i < conj.i)
+            print("Before postcondition: ")
+            print(first_q)
+            final_first_q=self.postcondition(first_q)
+            print("After postcondition: ")
+            yield final_first_q
+            #yield " ".join(x.text for x in parse if x.i < conj.i)
+            second_q=" ".join(x.text for x in parse if x.i > conj.i)
+            print("Before postcondition: ")
+            print(second_q)
+            final_second_q=self.postcondition(second_q)
+            print("After postcondition")
+            yield final_second_q
+            #yield " ".join(x.text for x in parse if x.i > conj.i)
+          elif verb.i < verbs[-1].i and verbs[-1].dep_ == "conj":
+            # Otherwise, if this verb is child of another verb with "conj"
+            # relation, we can have two sentences with the same subject
+
+            # Get what came before verb and doesn't modify verb
+            left_tokens = [x for x in parse if x.i < verb.i and not
+                            (x.head == verb and (x.pos_ == "ADVERB" or x.pos_ == "AUX"))]
+
+            # Get possible completions
+            first_verb = [x for x in parse if x.i < conj.i and not x in left_tokens]
+            second_verb = [x for x in parse if x.i > conj.i]
+
+            # Return those
+            first_q=" ".join(x.text for x in left_tokens + first_verb)
+            print("Before postcondition: ")
+            print(first_q)
+            final_first_q=self.postcondition(first_q)
+            print("After postcondition")
+            yield final_first_q
+            #yield " ".join(x.text for x in left_tokens + first_verb)
+            second_q=" ".join(x.text for x in left_tokens + second_verb) 
+            print("Before postcondition: ")
+            print(second_q)
+            final_second_q=self.postcondition(second_q)
+            print("After postcondition")
+            yield final_second_q
+            #yield " ".join(x.text for x in left_tokens + second_verb) 
+        # If there are nouns and verbs on both sides of it, the just iterate on those
+        # If there are only verbs, duplicate the subject
+        None
+      # Heuristic16: 
+      # WDT tag: which/what
+      # WRB tag: where/why/when
+    else:
+      yield question
   def postcondition(self,question):
+    rem=['also','another','later']
+    for i in rem:
+      if question.find(i)!=-1:
+        question=question.replace(i,"")
     len=syntax_checker(question)
     #print("length of syntax check: ",len)
     return len
