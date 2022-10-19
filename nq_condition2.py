@@ -7,6 +7,7 @@ from syntax import *
 import pyinflect
 import spacy
 from collections import Counter
+from gingerit.gingerit import GingerIt
 
 nlp = spacy.load('en_core_web_sm')
 
@@ -98,27 +99,38 @@ class remove_regexp_patterns(ConditionalHeuristic):
       return cls_.__name__ 
     def precondition(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
       #print()
+      flag=False
       for pattern, replacement in self.regexp_trims.items():
-          question = pattern.sub(replacement, question)
+        if pattern.search(question):
+          #print("found pattern",pattern)
+          return True
+      return flag
     def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
         #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
         """
         Remove punctuation patterns at the beginning and the end of the question
         """
         print("Remove regex patterns")
-        question = question
-        #print("loop items: ",self.regexp_trims.items())
-        for pattern, replacement in self.regexp_trims.items():
-          #print("pattern ",pattern," and replacement",replacement)
-          question = pattern.sub(replacement, question)
-        prev=question.replace("  ", "").strip()
-        final_q=self.postcondition(prev)
-        yield final_q
+        flag=self.precondition(qb_id,question,lexical_answer_type,question_determiner)
+        if flag==True:
+          question = question
+          #print("loop items: ",self.regexp_trims.items())
+          for pattern, replacement in self.regexp_trims.items():
+            #print("pattern ",pattern," and replacement",replacement)
+            #print("Replacing: ",pattern)
+            if pattern.search(question):
+              question = pattern.sub(replacement, question)
+            #print("Question: ",question)
+          prev=question.replace("  ", "").strip()
+          print(prev)
+          final_q=self.postcondition(prev)
+          yield final_q
+        else:
+          yield question
     
     def postcondition(self,question):
-      len=syntax_checker(question)
-      #print("length of syntax check: ",len)
-      return len
+      len1=GingerIt().parse(question)['result']
+      return len1
   # Heuristic 2 -- name this answer type correction
 class imperative_to_question(ConditionalHeuristic):
     def my_name(cls_): 
@@ -272,7 +284,7 @@ class drop_after_punctuation(ConditionalHeuristic):
     def my_name(cls_): 
       return cls_.__name__ 
     def precondition(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
-      for pattern in [re.compile("[;,!?.].*$"), re.compile("^[;,!?.].*")]:
+      for pattern in [re.compile("[;,!?].*$"), re.compile("^[;,!?].*")]:
           if pattern.search(question):
             #print("patterns",pattern)
             return True
@@ -297,18 +309,27 @@ class drop_after_punctuation(ConditionalHeuristic):
             question = pattern.sub('', question)
             yield question"""
     def postcondition(self,question,question_prev):
-      sent = nlp(question_prev)
+      temp="%s" %question_prev
+      temp=re.sub('".*?"', '', temp)
+      #print(temp)
+      sent = nlp(temp)
       has_noun = 1
       has_verb = 1
       for token in sent:
-        if token.pos_ in ["NOUN", "PROPN", "PRON"]:
-          has_noun -= 1
+        #print("dep: ",token.pos_)
+        if token.pos_ in ["NOUN", "PROPN", "PRON","NUM","DET"]:
+          #print("dep: ",token.dep_)
+          if token.dep_=="nsubj" or token.dep_=="nsubjpass":
+            has_noun -= 1
         elif token.pos_ == "VERB":
+          has_verb -= 1
+        elif token.pos_=="AUX" and token.dep_=="ROOT":
           has_verb -= 1
       if has_noun >= 1 or has_verb >= 1:
         print("check passed\n")
         return question
       check2=is_quote_ok(question_prev)
+      print("chech2",check2)
       if check2==True:
         return syntax_checker(question_prev)
       else:
@@ -561,15 +582,72 @@ class no_wh_words(ConditionalHeuristic):
     #print(wh_re)
     if not wh_re.search(question):
       flag=True
+    else:
+      if question.lower().find("this")!=-1:
+        flag=True
+      else:
+        flag=True
+        temp_f=False
+        sent=nlp(question.lower())
+        for x in sent:
+          loc=x.i+1
+          if loc<len(sent):
+            #print("text",x.text,"next: ",sent[loc].pos_," with text ",sent[loc].text,end="  ")
+            #print("")
+            loc3=x.i+2
+            if loc3<len(sent):
+              if x.text=="which" and (sent[loc3].pos_=="NOUN" or sent[loc3].pos_=="PROPN") and sent[loc].text=="\"":
+                #print("senr",sent[loc].text)
+                flag=False
+              if x.text=="what" and (sent[loc3].pos_=="NOUN" or sent[loc3].pos_=="PROPN") and sent[loc].text=="\"":
+                #print("senr",sent[loc].text)
+                flag=False
+            if x.text=="which" and (sent[loc].pos_=="NOUN" or sent[loc].pos_=="PROPN"):
+              #print("senr",sent[loc].text)
+              flag=False
+            if x.text=="what" and (sent[loc].pos_=="NOUN" or sent[loc].pos_=="PROPN"):
+              #print("senr",sent[loc].text)
+              flag=False
+            if x.text=="when" and (sent[loc].pos_=="VERB" or sent[loc].pos_=="AUX"):
+              #print("senr",sent[loc].text)
+              flag=False
+            if x.text=="where" and (sent[loc].pos_=="VERB" or sent[loc].pos_=="AUX"):
+              #print("senr",sent[loc].text)
+              flag=False
+            if x.text.lower()=="whose" or x.text.lower()=="who":
+              #print("senr",sent[loc].text)
+              flag=False
+            if x.text=="what" or x.text=="which":
+              lox=x.i+1
+              loc2=x.i
+              for y in sent.noun_chunks:
+                #print("in pre: ",y.text,end=" ")
+                if y.start==lox:
+                  #print("1st if",y.text)
+                  flag=False
+                if loc2>=y.start and loc2<y.end and ((y.start+1)!=y.end):
+                  #print("2nd if",y.text)
+                  flag=False
+            wh=["where", "who", "what", "when", "why", "how", "which"]
+            if x.text in wh:
+              a=question.split(x.text)[0]
+              b=question.split(x.text)[1]
+              if is_quote_ok(a)==False or is_quote_ok(b)==False:
+                flag=False
+          if x.dep_=="relcl":
+            #print("text found",x.text," with pos",x.pos_)
+            temp_f=True  
+          #flag=True
     return flag
   def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     result = question
+    question_b="%s"%question
     flag=self.precondition(qb_id,question,lexical_answer_type,question_determiner)
     if flag==False:
       return result
     if flag==True:
-      print("Question in function: ",question)
+      #print("Question in function: ",question)
       if len(question) <1 and qb_id in self.answer_type_dict:
         answer_type = self.answer_type_dict[qb_id] # get the answer type from qb_id
           # whether starting from VERB or not:
@@ -589,65 +667,211 @@ class no_wh_words(ConditionalHeuristic):
       else:
         #if not qb_id in self.answer_type_dict:
         #logging.warn("Missing answer type %i" % qb_id)
-        text=nlp(question)
+        text=nlp(question.lower())
 
         """fil = [i for i in text.ents]
         for i in fil:
           print("text: ",i.text," label ",i.label_)"""
         #print("labels: ",fil.label_)
         n_flag=True
-        for l in range (len(list(text.noun_chunks))):
+        for l in range (len(list(text.noun_chunks))-1):
           i=list(text.noun_chunks)[l]
-          print("checking: ",i.text)
-          if i.text.find("this")==0:
+          #print("checking: ",i.text,end=" ")
+          if i.text.find("this")!=-1:
+            print("Found")
             n_flag=False
             next=text[i.end].pos_
+            next_tag=text[i.end].tag_
             next_dep=text[i.end].dep_
+            next_element=text[i.end]
             #if next_tag=="prep"
             item=list(text.noun_chunks)[l+1]
-            #print("replacing: ",i.text)
-            #print("next item: ",item.text)
-            if next=="PUNCT":
+            #print("replacing: ",i.text, i.start, " and ",i.end)
+            #print("next item: ",text[i.end].text," and pos ",next," tag ",next_tag," dep ",next_dep)
+            if is_quote_ok(i.text)==False:
               replaced=i.text.replace("this","which")
-              replaced=replaced+" is "
-              to_replaced=i.text+" , "
-              result = re.sub(to_replaced, replaced, question, 1)
+              result = re.sub(i.text, replaced, question.lower(), 1)
+            elif next=="PUNCT":
+              #print("PUNC found")
+              if (i.end+1)<len(text):
+                item_next= text[i.end].pos_
+                if item_next!="NOUN":
+                  replaced=i.text.replace("this","which")
+                  result = re.sub(i.text, replaced, question, 1)
+                else:
+                  replaced=i.text.replace("this","which")
+                  #print("replaced in punc ",replaced)
+                  replaced=replaced+" is"
+                  to_replaced=i.text+" , "
+                  result = re.sub(to_replaced, replaced, question, 1)
+            elif (i.start==(i.end-1)):
+              if item.start==i.end:
+                replaced=i.text.replace("this","which")
+              else:
+                replaced=i.text.replace("this","what")
+              result = re.sub(i.text, replaced, question, 1)
+            elif next=="VERB" or next=="AUX" or next=="SCONJ" or next=="CCONJ" or next_tag=="IN":
+              replaced=i.text.replace("this","which")
+              result = re.sub(i.text, replaced, question.lower(), 1)
+            elif next_tag=="IN":
+              t_f=False
+              for k in text:
+                if k.i>=next_element.i and (k.pos_=="VERB" or k.pos_=="AUX"):
+                  #print("Verb found")
+                  t_f=True
+              if t_f==True:
+                replaced=i.text.replace("this","which")
+              else:
+                replaced=i.text.replace("this","which is")
+              result = re.sub(i.text, replaced, question.lower(), 1)
             else:
               if item.start!=(i.end+1):
                 #print("next item: ",item.text)
                 replaced=i.text.replace("this","which")
-                replaced=replaced+" is "
+                replaced=replaced+" is"
               else:
-                print("Question here")
+                print("Question here",i.text)
                 replaced=i.text.replace("this","which is")
-              result = re.sub(i.text, replaced, question, 1)
-          if n_flag==True:
-            index=question.find("this")
-            if index!=-1:
-              result = re.sub('this', 'which', question, 1)
-            else:
-              parse = self.current_analysis[question]["spacy"]
+                #print("rep ",replaced)
+              #print("rep ",replaced)
+              result = re.sub(i.text, replaced, question.lower(), 1)
+              #print("result",result)
+        #print("n flag val",n_flag)
+        if n_flag==True:
+          index=question.lower().find("this")
+          if index!=-1:
+            result = re.sub('this', 'which', question, 1)
+          else:
+            parse = self.current_analysis[question]["spacy"]
     
-              root_verb = [x for x in parse if x.pos_ == "VERB" and not any(1 for _ in x.ancestors)]
-              mod = [x for x in parse if x.pos_ == "NOUN" and x.head in root_verb and x.i<x.head.i]
-              mod2 = [x for x in parse if x.pos_ == "PRON" and x.head in root_verb and x.i<x.head.i]
+            root_verb = [x for x in parse if x.pos_ == "VERB" and not any(1 for _ in x.ancestors)]
+            if len(root_verb)==0:
+              root_verb = [x for x in parse if x.pos_ == "AUX" and not any(1 for _ in x.ancestors)]
+            root_verb = [x for x in parse if x.pos_ == "VERB"]
+            mod = [x for x in parse if x.pos_ == "NOUN" and x.i<x.head.i]
+            mod2 = [x for x in parse if x.pos_ == "PRON" and x.head in root_verb and x.i<x.head.i]
+            wh_done=False
+            #print("mod",mod)
+            for x in parse:
+              #print("parse: ",x.text," pos ",x.pos_," head ",x.head,x.tag_,end="  ")
+              if x.pos_ == "PRON" and x.head in root_verb and x.i<x.head.i:
+                #print("Condition here first pron",x.text.lower()," tag ",x.tag_)
+                if x.tag_=="PRP":
+                    #print("Condition here",x.text.lower())
+                    if x.i==0 and x.text.lower()=="it":
+                      #print("Code in pos 0")
+                      #result=question.replace(" "+x.text+" "," what thing ")
+                      result=re.sub(x.text.lower()+" ","what thing ", question.lower(), 1)
+                    elif x.text.lower()=="it":
+                      #print("Code in it")
+                      #result=question.replace(" "+x.text+" "," what thing ")
+                      result=re.sub(" "+x.text.lower()+" "," what thing ", question.lower(), 1)
+                    else:
+                      #result=question.replace(x.text,"who")
+                      result=re.sub(x.text.lower(), "who", question.lower(), 1)
+                      #result=re.sub(x.text.lower(), "what", question.lower(), 1)
+                      #print("result: ",result)
+                    wh_done=True
+                    break
+                elif x.tag_=="PRP$":
+                  #print("Condition here",x.text.lower())
+                  result=re.sub(x.text.lower(), "whose", question.lower(), 1)
+                  #print("result: ",result)wh_done=True
+                  wh_done=True
+                  break
+
+            #print("1st",wh_done)
+            if wh_done==False:
               for x in parse:
-                if x.pos_ == "PRON" and x.head in root_verb and x.i<x.head.i:
-                  result=question.replace(x.text,"what")
+                if x.pos_ == "DET" and x.text!="which" and x.head in mod and x.i<x.head.i:
+                  #print("x repl: ",x.text)
+                  #result=question.replace(x.text,"whose")
+                  result=re.sub(x.text.lower(), "whose", question.lower(), 1)
+                  #print("result: ",result)
+                  wh_done=True
+                  break
+            #print("Before second one: ",wh_done)
+            if wh_done==False:
+              for x in parse:
+                #print("Code here in sec pron",x.text," POS ",x.pos_)
+                if x.pos_=="PRON":
+                  if x.tag_=="PRP":
+                    if x.i==0 and x.text.lower()=="it":
+                      #print("Code in pos 0")
+                      #result=question.replace(" "+x.text+" "," what thing ")
+                      result=re.sub(x.text.lower()+" ","what thing ", question.lower(), 1)
+                    elif x.text.lower()=="it":
+                      #print("Code in it")
+                      #result=question.replace(" "+x.text+" "," what thing ")
+                      result=re.sub(" "+x.text.lower()+" "," what thing ", question.lower(), 1)
+                    else:
+                      #result=question.replace(x.text,"who")
+                      result=re.sub(x.text.lower(), "who", question.lower(), 1)
+                      #result=re.sub(x.text.lower(), "what", question.lower(), 1)
+                      #print("result: ",result)
+                    wh_done=True
+                    break
+                  elif x.tag_=="PRP$":
+                    #print("Condition here",x.text.lower())
+                    result=re.sub(x.text.lower(), "whose", question.lower(), 1)
+                    #print("result: ",result)
+                    wh_done=True
+                    break
+                elif x.pos_ == "DET"and x.text!="which":
+                  #print("x repl: ",x.text)
+                  #result=question.replace(x.text,"whose")
+                  result=re.sub(x.text.lower(), "whose", question.lower(), 1)
+                  wh_done==True
+                  break
+            #print(wh_done)
+            if wh_done==False:
+              for x in parse:
                 if x.pos_ == "NOUN" and x.head in root_verb and x.i<x.head.i:
-                  result=question.replace(x.text,"what")
-              print("list: ",mod," and ",mod2)
+                  #result=question.replace(x.text,"what")
+                  #print("code also noun")
+                  result=re.sub(x.text.lower(), "what", question.lower(), 1)
+                  wh_done=True
+                  break
+                    #wh_done=True
+                #result = re.sub("its", "which", question.lower(), 1)
+                    
+                """loc=x.i
+                    for y in parse.noun_chunks:
+                      if x.i>=y.start and x.i<y.end:
+                        result=question.replace(y.text,"what")"""
+              #print("list: ",mod," and ",mod2)
 
 
         print("Modified question: ",result)
-        yield self.postcondition(result)
+        yield self.postcondition(result,question_b)
 
         #result = re.sub('that', 'which', question, 1)
 
-  def postcondition(self,question):
-      len=syntax_checker(question)
+  def postcondition(self,question,question_b):
+      #len1=GingerIt().parse(question)['result']
+      question_list=question.lower().split(" ")
+      question_b_list=question_b.lower().split(" ")
+      for i in range (len(question_b_list)):
+        #print(question_list[i]," and ",question_b_list[i])
+        if question_list[i]!=question_b_list[i]:
+          #print("Not eq")
+          a=""
+          b=""
+          for j in range (len(question_list)):
+            if j<i:
+              a=a+"".join(question_list[j])
+            else:
+              b=b+"".join(question_list[j])
+          #a=question.split(question_list[i])[0]
+          #b=question.split(question_list[i])[1]
+          #print(a," and ",b)
+          if is_quote_ok(a)==False or is_quote_ok(b)==False:
+            return question_b
+      len1=question
+      return len1
+      #len=syntax_checker(question)
       #print("length of syntax check: ",len)
-      return len
+      #return len
       # Heuristic12
 class replace_this_is(ConditionalHeuristic):
   def my_name(cls_): 
@@ -790,24 +1014,39 @@ class split_conjunctions(ConditionalHeuristic):
     parse = self.current_analysis[question]["spacy"]
     for x in parse:
       #print(x," and pos: ",x.pos_)
-      if x.pos_=="CCONJ":
+      if x.pos_=="CCONJ" or x.pos_=="SCONJ":
         flag=True
     return flag
   def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
+    backup=question
     # If so, then we need to know if they are independent clauses
-    print("Heuristic 1: Split Conjunctions")
-    parse = self.current_analysis[question]["spacy"]
-    flag=self.precondition(qb_id,question,lexical_answer_type,question_determiner)
+    #print("Heuristic 1: Split Conjunctions")
+    sem_part=""
+    prev="%s" %question
+    #print(self.current_analysis[question])
+    if question.find(";")!=-1:
+      sem_part=" ; "+question.split(";")[1]
+      self.current_analysis[prev]["spacy"]=nlp(question.split(";")[0])
+      question=question.split(";")[0]
+      print(self.current_analysis[prev]["spacy"])
+    parse = self.current_analysis[prev]["spacy"]
+    flag=self.precondition(qb_id,prev,lexical_answer_type,question_determiner)
     if flag==True:
-        tagged = self.current_analysis[question]["nltk_tags"]
+        #tagged = self.current_analysis[question]["nltk_tags"]
         root=[x for x in parse if (not any(1 for _ in x.ancestors))]
 
-        print("Finding root: ",root)
+        #print("Finding root: ",root)
         #parse2=parse.remove(root)
         root_verb = [x for x in parse if x.pos_ == "VERB" and (not any(1 for _ in x.ancestors))]
         for x in parse:
+          #print("root",x.text," and pos: ",x.pos_)
           if x.pos_ == "VERB" and (not any(1 for _ in x.ancestors)):
             root_verb=[x]
+            break
+          elif x.pos_ == "AUX" and (not any(1 for _ in x.ancestors)):
+            #print("code entered in aux")
+            root_verb=[x]
+            break
             #verbs = [x for x in parse if x.pos_ == "VERB" and x.head in root_verb]
           elif x.pos_ == "VERB" and (any(1 for _ in x.ancestors)):
             flag_root=True
@@ -816,25 +1055,32 @@ class split_conjunctions(ConditionalHeuristic):
                 flag_root=False
             if flag_root==True:
               root_verb=[x]
+        #print("root list final",root_verb)
         flag_verb=False
         for x in parse:
           if x.dep_=="ROOT" and x.pos_=="VERB":
             flag_verb=True
-        if flag_verb==True:
           verbs = [x for x in parse if x.pos_ == "VERB" and x.head in root_verb]
+          #print("root:",root_verb[0])
+          if root_verb[0] not in verbs:
+            #print("code here",root_verb[0])
+            verbs.extend(root_verb)
         else:
+            #print("value if",flag_verb," abd ",root_verb)
             verbs=[]
             verbs.append(root_verb[0])
             verbs.extend([x for x in parse if x.pos_ == "VERB" and x.head in root_verb])
-
+        #print("verbs",verbs)
         verb_conj = set()
         for verb in verbs:
+          #print("verb: ",verb)
           for child in verb.children:
-            ##print("child before if: ",child)
-            if child.dep_ == 'cc' and child.pos_ == "CCONJ":
-              ##print("verb: ",verb," and child: ",child)
+            #print("child before if: ",child," and pos ",child.pos_," and dep ",child.dep_)
+            if (child.dep_ == 'cc' or child.dep_=='mark') and (child.pos_ == "CCONJ" or child.pos_=="SCONJ"):
+              #print("verb: ",verb," and child: ",child)
               verb_conj.add((verb, child))
 
+        #print("verb conj: ",verb_conj)
         if len(verb_conj) > 1:
           logging.warn("Multiple conjunctions in sentence and we don't know what to do: " + question)
         
@@ -850,21 +1096,23 @@ class split_conjunctions(ConditionalHeuristic):
         
           
         for verb, conj in verb_conj:
+          #print("verb dep in for loop: ",verbs[-1].dep_," text: ",verbs[-1].text)
           # Check to see if this is the second verb and if it has no ancestors
           if verb.i > verbs[0].i and not any(1 for _ in verb.ancestors):
             # If so, we have two independent clauses, so yield the two
             # parts on either side of the conjunction
+            #print("Code in the fisr if")
             first_q=" ".join(x.text for x in parse if x.i < conj.i)
             print("Before postcondition: ")
             print(first_q)
-            final_first_q=self.postcondition(first_q)
+            final_first_q=self.postcondition(first_q,backup)
             print("After postcondition: ")
             yield final_first_q
             #yield " ".join(x.text for x in parse if x.i < conj.i)
             second_q=" ".join(x.text for x in parse if x.i > conj.i)
             print("Before postcondition: ")
             print(second_q)
-            final_second_q=self.postcondition(second_q)
+            final_second_q=self.postcondition(second_q,backup)
             print("After postcondition")
             yield final_second_q
             #yield " ".join(x.text for x in parse if x.i > conj.i)
@@ -873,27 +1121,67 @@ class split_conjunctions(ConditionalHeuristic):
             # relation, we can have two sentences with the same subject
 
             # Get what came before verb and doesn't modify verb
+            """print("Code in the second if")
+            for x in parse:
+              if x.i<verb.i:
+                print("text: ",x.text," head: ",x.head, " pos: ",x.pos_)"""
             left_tokens = [x for x in parse if x.i < verb.i and not
-                            (x.head == verb and (x.pos_ == "ADVERB" or x.pos_ == "AUX"))]
+                            (x.head == verb and (x.pos_ == "ADV" or x.pos_ == "AUX"))]
 
             # Get possible completions
+
             first_verb = [x for x in parse if x.i < conj.i and not x in left_tokens]
             second_verb = [x for x in parse if x.i > conj.i]
-
+            #print("Second verb ")
+                  
+            """for b in temp_nlp:
+              if b.i==0:
+                if b.pos_=="PRON" or b.pos_="NOUN":
+                  second="""
+            #print("first: ",first_verb," second ",second_verb," left tok: ",left_tokens)
             # Return those
             first_q=" ".join(x.text for x in left_tokens + first_verb)
             print("Before postcondition: ")
             print(first_q)
-            final_first_q=self.postcondition(first_q)
+            final_first_q=self.postcondition(first_q,backup)
             print("After postcondition")
             yield final_first_q
             #yield " ".join(x.text for x in left_tokens + first_verb)
-            second_q=" ".join(x.text for x in left_tokens + second_verb) 
-            print("Before postcondition: ")
-            print(second_q)
-            final_second_q=self.postcondition(second_q)
-            print("After postcondition")
-            yield final_second_q
+            nsub_flag=False
+            #print("verbs here:",verbs)
+            for x in second_verb:
+              #print("text",x.text," pos ",x.pos_," dep ",x.dep_," tag_ ",x.tag_)
+              #print("testing: ",x.text," with val: ",nsub_flag)
+              if x in verbs:
+                break
+              if x.dep_=="nsubj" or x.dep_=="nsubjpass":
+                #print("code in nsubtrue")
+                nsub_flag=True
+            if nsub_flag==True:
+              second_q=" ".join(x.text for x in second_verb) 
+            else:
+              #print("code in not nsubtrue")
+              second_q=" ".join(x.text for x in left_tokens+second_verb) 
+            print("Before precondition")
+            print(second_q+sem_part)
+            yield self.postcondition(second_q+sem_part,backup)
+            #print("types: ",type(second_verb))
+            if nsub_flag==True:
+              for x in second_verb:
+                #print(x.text," pos here ",x.pos_)
+                if x in verbs:
+                  break
+                if (x.dep_=="nsubj" or x.dep_=="nsubjpass") and x.pos_=="PRON":
+                  #second_verb.remove(x)
+                  loc=second_verb.index(x)+1
+                  #print("After removal, ",second_verb)
+                  second_q=" ".join(x.text for x in left_tokens+second_verb[loc:]) 
+                  print("Before postcondition in 3rd part: ")
+                  print(second_q+sem_part)
+                  final_second_q=self.postcondition(second_q+sem_part,backup)
+                  print("After postcondition in 3rd part")
+                  yield final_second_q
+                  break
             #yield " ".join(x.text for x in left_tokens + second_verb) 
         # If there are nouns and verbs on both sides of it, the just iterate on those
         # If there are only verbs, duplicate the subject
@@ -903,14 +1191,50 @@ class split_conjunctions(ConditionalHeuristic):
       # WRB tag: where/why/when
     else:
       yield question
-  def postcondition(self,question):
-    rem=['also','another','later']
+  def postcondition(self,question1,question_prev):
+    check2=is_quote_ok(question1)
+    if check2==False:
+      return syntax_checker(question_prev)
+    doc=nlp(question1)
+    c=0
+    result='%s' % question1
+    #print("Len in doc",len(doc))
+    for i in doc:
+      c=c+1
+      if c<(len(doc)):
+        #print("c: ",c," ps ",list(doc)[c].pos_," og ",list(doc)[c].text)
+        if i.text=="another" and list(doc)[c].pos_=="NOUN":
+          result=question1.replace(i.text,"a")
+    rem=['also','later','in another',"another"]
     for i in rem:
-      if question.find(i)!=-1:
-        question=question.replace(i,"")
-    len=syntax_checker(question)
+      if result.lower().find(i)!=-1:
+        result=result.replace(i,"")
+    """c=0
+    for i in doc.noun_chunks:
+      k=i.end
+      if k<len(doc):
+        if doc[k].pos_=="PRON":
+          question=question.replace(doc[k].text,"",1)
+          break
+        if (doc[k].text=="\"" and k+1<len(doc) and doc[k+1].pos_=="PRON"):
+          question=question.replace(doc[k+1].text,"",1)
+          break
+    for i in doc.noun_chunks:
+      l=i.start
+      if l>0:
+        if doc[l-1].pos_=="PRON":
+          question=question.replace(doc[k].text,"",1)
+    c=0
+    for i in doc:
+      c=c+1
+      if c<(len(doc)):
+        if i.pos_=="PRON" and list(doc)[c].pos_=="PRON":
+          question=question.replace(i.text,"",1)
+          break"""
+    len1=GingerIt().parse(result)['result']
+    #len1=syntax_checker(question)
     #print("length of syntax check: ",len)
-    return len
+    return len1
     
 class add_question_word(ConditionalHeuristic):
   def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
