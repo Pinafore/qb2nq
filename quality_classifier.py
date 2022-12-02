@@ -390,9 +390,9 @@ if __name__=="__main__":
   parser = argparse.ArgumentParser(description="Create classifier to discriminate synthetic questions from real questions")
   parser.add_argument('--limit', type=int, default=-1)
   parser.add_argument('-f', '--feature_list', nargs='+', default=['uniques','max_duplicates', 'percentile_length_5','percentile_length_95', 'bigrams'])
-  parser.add_argument('--predictions', type=str, default='intermediate_results/nqlike_scores.csv')
+  parser.add_argument('--predictions', type=str, default='results/nqlike_scores.csv')
   parser.add_argument('--nq_data', type=str, default='TriviaQuestion2NQ_Transform_Dataset/NaturalQuestions_train_reformatted.json')
-  parser.add_argument('--nqlike_data', type=str, default='intermediate_results/nqlike_train.json')  
+  parser.add_argument('--nqlike_data', type=str, default='results/nq_like.json')  
   parser.add_argument('--max_term_features', type=int, default=50)
   parser.add_argument('--seq', type=str, default='')
   args = parser.parse_args()
@@ -400,7 +400,7 @@ if __name__=="__main__":
 	# 0 --wellformedness accuracy output
 	# 1 --NQ-like output
 
-  nqlike_path = 'nqlike_train/{}.json'.format(args.seq)
+  nqlike_path = 'results/nq_like.json'
   train, test, nq_like, nq_len = build_dataset(args.nq_data, nqlike_path, args.limit)
 
   c = Classifier(args.feature_list, max_term_features=args.max_term_features, nq_len=nq_len)
@@ -414,7 +414,7 @@ if __name__=="__main__":
   
   c.evaluate(model, test)
   logging.info("Weight dict", weight_dict)
-  with open('intermediate_results/logistic_regression_weight_dict_QB_NQ.txt', 'w') as f:
+  with open('results/logistic_regression_weight_dict_QB_NQ.txt', 'w') as f:
     f.write(json.dumps(weight_dict))
   
   # save feature weight  
