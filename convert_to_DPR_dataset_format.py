@@ -1,7 +1,7 @@
 import os
 import re
-os.environ['TRANSFORMERS_CACHE'] = '/fs/clip-scratch/tasnim/new_fol_temp/temp_cache'
-os.environ['HF_DATASETS_CACHE'] = '/fs/clip-scratch/tasnim/new_fol_temp/temp_cache'
+#os.environ['TRANSFORMERS_CACHE'] = '/fs/clip-scratch/tasnim/new_fol_temp/temp_cache'
+#os.environ['HF_DATASETS_CACHE'] = '/fs/clip-scratch/tasnim/new_fol_temp/temp_cache'
 import json
 f = open('/fs/clip-scratch/tasnim/hay2/DPR/DPR/dpr/downloads/data/retriever/nq-dev.json')
 #f1 = open('nq_like_squad.json','w')
