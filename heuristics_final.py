@@ -12,7 +12,7 @@ import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import wordnet as wn
 from nltk import Tree
-from nq_condition2 import *
+from nq_condition3 import *
 
 import spacy
 import neuralcoref
