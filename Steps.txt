@@ -1,5 +1,7 @@
 1. First we have to convert qanta questions to fit the heuristics
-python3 split_
+  python3 convert_qanta_input.py
+2. The heuristics (in qb_path, we have to give the file path we just created in step 1, not the original qb_path)
+  python3 heuristics.py --qb_path=... --output_file=...
 
 
 2. DPR
