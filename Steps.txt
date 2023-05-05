@@ -1,4 +1,8 @@
-1. DPR
+1. First we have to convert qanta questions to fit the heuristics
+python3 split_
+
+
+2. DPR
   a. train dense encoder
   b. create unsupervised NQ dataset
   
