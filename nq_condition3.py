@@ -14,7 +14,10 @@ from syntax_check import *
 nlp = spacy.load('en_core_web_sm')
 
 class ConditionalHeuristic:
-  def __init__(self, analysis):
+  def __init__(self, name, config):
+    self.replace = True
+    self.name = name
+    self.current_analysis = {} 
     with open("config.json") as json_file:
       config = json.load(json_file)
     self.current_analysis = {}
@@ -32,10 +35,11 @@ class ConditionalHeuristic:
     self.imperative_pattern = {re.compile(x) for x in config["imperative"]}
     self.non_last_sent_transform_dict = config["non_last_sent_transform_dict"]
     self.answer_type_dict = {0: "character", 1: "thing", 94: "ruler", 102: "novel", 104: "organ",19: "character",8:"government",98:"person",59:"person",20:"person",17:"country",119:"essay",378:"poem",904:"book"}
-  
+
   def precondition(self, question):
     return True
-
+  def add_analysis(self, question, parses):
+      self.current_analysis[question] = parses
   def postcondition(self, question):
     return True
 
@@ -137,23 +141,6 @@ class remove_regexp_patterns(ConditionalHeuristic):
 class imperative_to_question(ConditionalHeuristic):
     def my_name(cls_): 
         return cls_.__name__ 
-    
-    def cache_analysis(self, question, verbose=False):
-      """
-      Parse the sentence for downstream heuristics.  This prevents repeated computation in each of the heuristics.
-      """
-      print("code in cachex")
-      tokens = nltk.word_tokenize(question.lower())
-      text = nltk.Text(tokens)
-      tagged = nltk.pos_tag(text)
-
-      spacy_parse = nlp(question)
-      if verbose:
-        for ii in spacy_parse.sents:
-          logging.debug(to_nltk_tree(ii.root))
-            
-      self.current_analysis[question] = {"spacy": spacy_parse, "nltk_tokens": tokens, "nltk_tags": tagged}
-      print(self.current_analysis[question]["spacy"])
     def precondition(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
       #print("imperative",question)
       for pattern in self.imperative_pattern:
@@ -166,7 +153,6 @@ class imperative_to_question(ConditionalHeuristic):
         Convert "-- name this" patterns to "which"
         """
         #print("Heuristic 2: Imperative to question")
-        self.cache_analysis(question)
         flag=self.precondition(qb_id,question,lexical_answer_type,question_determiner)
         if flag==True:
           for pattern in self.imperative_pattern:
@@ -295,10 +281,10 @@ class imperative_to_question(ConditionalHeuristic):
                 # and the question version
                 #yield "%s is the %s" % (question_determiner, reduced)
     def postcondition(self,question):
-      #len=syntax_checker(question)
+      len=syntax_checker(question)
       #print("length of syntax check: ",len)
-      #return len
-      return question
+      return len
+      #return question
   # Heuristic 3 semicolon
 class drop_after_punctuation(ConditionalHeuristic):
     def my_name(cls_): 
@@ -594,23 +580,6 @@ class convert_continuous_to_present(ConditionalHeuristic):
 class no_wh_words(ConditionalHeuristic):
   def my_name(cls_): 
       return cls_.__name__ 
-  
-  def cache_analysis(self, question, verbose=False):
-      """
-      Parse the sentence for downstream heuristics.  This prevents repeated computation in each of the heuristics.
-      """
-      print("code in cachex")
-      tokens = nltk.word_tokenize(question.lower())
-      text = nltk.Text(tokens)
-      tagged = nltk.pos_tag(text)
-
-      spacy_parse = nlp(question)
-      if verbose:
-        for ii in spacy_parse.sents:
-          logging.debug(to_nltk_tree(ii.root))
-            
-      self.current_analysis[question] = {"spacy": spacy_parse, "nltk_tokens": tokens, "nltk_tags": tagged}
-      print(self.current_analysis[question]["spacy"])
   def precondition(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #print("question here",question.lower())
     flag=False
@@ -679,8 +648,8 @@ class no_wh_words(ConditionalHeuristic):
               a=question.lower().split(x.text)[0]
               #print("printing part ",a)
               b=question.lower().split(x.text)[1]
-              """if is_quote_ok(a)==False or is_quote_ok(b)==False:
-                flag=False"""
+              if is_quote_ok(a)==False or is_quote_ok(b)==False:
+                flag=False
           if x.dep_=="relcl":
             #print("text found",x.text," with pos",x.pos_)
             temp_f=True  
@@ -688,7 +657,6 @@ class no_wh_words(ConditionalHeuristic):
     return flag
   def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
-    self.cache_analysis(question)
     result = question
     wh_words = self.wh_words
     wh_re = re.compile("|".join(wh_words))
@@ -739,8 +707,7 @@ class no_wh_words(ConditionalHeuristic):
             item=list(text.noun_chunks)[l+1]
             #print("replacing: ",i.text, i.start, " and ",i.end)
             #print("next item: ",text[i.end].text," and pos ",next," tag ",next_tag," dep ",next_dep)
-            fla=True
-            if fla==False:
+            if is_quote_ok(i.text)==False:
               replaced=i.text.replace("this","which")
               result = re.sub(i.text, replaced, question.lower(), 1)
             elif next=="PUNCT":
@@ -809,23 +776,24 @@ class no_wh_words(ConditionalHeuristic):
             for x in parse:
               #print("parse: ",x.text," pos ",x.pos_," head ",x.head,x.tag_,end="  ")
               if x.pos_ == "PRON" and x.head in root_verb and x.i<x.head.i:
-                #print("Condition here first pron",x.text.lower()," tag ",x.tag_)
+                print("Condition here first pron",x.text.lower()," tag ",x.tag_)
                 if x.tag_=="PRP":
                     #print("Condition here",x.text.lower())
                     if x.i==0 and x.text.lower()=="it":
                       #print("Code in pos 0")
                       #result=question.replace(" "+x.text+" "," what thing ")
-                      result=re.sub(x.text.lower()+" ","what thing ", question.lower(), 1)
+                      result=re.sub(x.text.lower()+" ",question_determiner+" ", question.lower(), 1)
                     elif x.text.lower()=="it":
                       #print("Code in it")
                       #result=question.replace(" "+x.text+" "," what thing ")
-                      result=re.sub(" "+x.text.lower()+" "," what thing ", question.lower(), 1)
+                      result=re.sub(" "+x.text.lower()+" "," "+question_determiner+" ", question.lower(), 1)
                     else:
                       #result=question.replace(x.text,"who")
+                      print("Code in replaced, ",question_determiner)
                       if x.i==0:
-                        result=re.sub(x.text.lower()+" ", "who ", question.lower(), 1)
+                        result=re.sub(x.text.lower()+" ",question_determiner+" ", question.lower(), 1)
                       else:
-                        result=re.sub(" "+x.text.lower()+" ", " who ", question.lower(), 1)
+                        result=re.sub(" "+x.text.lower()+" "," "+question_determiner+" ", question.lower(), 1)
                       #result=re.sub(x.text.lower(), "what", question.lower(), 1)
                       #print("result: ",result)
                     wh_done=True
@@ -878,17 +846,17 @@ class no_wh_words(ConditionalHeuristic):
                     if x.i==0 and x.text.lower()=="it":
                       #print("Code in pos 0")
                       #result=question.replace(" "+x.text+" "," what thing ")
-                      result=re.sub(x.text.lower()+" ","what thing ", question.lower(), 1)
+                      result=re.sub(x.text.lower()+" ",question_determiner+" ", question.lower(), 1)
                     elif x.text.lower()=="it":
                       #print("Code in it")
                       #result=question.replace(" "+x.text+" "," what thing ")
-                      result=re.sub(" "+x.text.lower()+" "," what thing ", question.lower(), 1)
+                      result=re.sub(" "+x.text.lower()+" "," "+question_determiner+" ", question.lower(), 1)
                     else:
                       #result=question.replace(x.text,"who")
                       if x.i==0:
-                        result=re.sub(x.text.lower()+" ", "who ", question.lower(), 1)
+                        result=re.sub(x.text.lower()+" ",question_determiner+" ", question.lower(), 1)
                       else:
-                        result=re.sub(" "+x.text.lower()+" ", " who ", question.lower(), 1)
+                        result=re.sub(" "+x.text.lower()+" ", " "+question_determiner+" ", question.lower(), 1)
                       #result=re.sub(x.text.lower(), "who", question.lower(), 1)
                       #result=re.sub(x.text.lower(), "what", question.lower(), 1)
                       #print("result: ",result)
@@ -990,8 +958,8 @@ class no_wh_words(ConditionalHeuristic):
           #a=question.split(question_list[i])[0]
           #b=question.split(question_list[i])[1]
           #print(a," and ",b)
-          """if is_quote_ok(a)==False or is_quote_ok(b)==False:
-            return question_b"""
+          if is_quote_ok(a)==False or is_quote_ok(b)==False:
+            return question_b
       doc=nlp(question)
       c=0
       result='%s' % question
@@ -1146,22 +1114,6 @@ class rejoin_contractions(ConditionalHeuristic):
 class split_conjunctions(ConditionalHeuristic):
   def my_name(cls_): 
     return cls_.__name__ 
-  def cache_analysis(self, question, verbose=False):
-    """
-    Parse the sentence for downstream heuristics.  This prevents repeated computation in each of the heuristics.
-    """
-    print("code in cachex")
-    tokens = nltk.word_tokenize(question.lower())
-    text = nltk.Text(tokens)
-    tagged = nltk.pos_tag(text)
-
-    spacy_parse = nlp(question)
-    if verbose:
-      for ii in spacy_parse.sents:
-        logging.debug(to_nltk_tree(ii.root))
-          
-    self.current_analysis[question] = {"spacy": spacy_parse, "nltk_tokens": tokens, "nltk_tags": tagged}
-    print(self.current_analysis[question]["spacy"])
   def precondition(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
     #-> Iterable[str]: Cannot force return type because of error 'ABCMeta' object is not subscriptable
     # First, find the verbs 
@@ -1173,11 +1125,9 @@ class split_conjunctions(ConditionalHeuristic):
         flag=True
     return flag
   def __call__(self, qb_id: int, question: str, lexical_answer_type: str, question_determiner: str):
-    self.cache_analysis(question)
     backup=question
     # If so, then we need to know if they are independent clauses
     #print("Heuristic 1: Split Conjunctions")
-    #print("prev vals: ",self.current_analysis)
     sem_part=""
     prev="%s" %question
     #print(self.current_analysis[question])
@@ -1186,7 +1136,6 @@ class split_conjunctions(ConditionalHeuristic):
       self.current_analysis[prev]["spacy"]=nlp(question.split(";")[0])
       question=question.split(";")[0]
       #print(self.current_analysis[prev]["spacy"])
-    #print("prev vals: ",self.current_analysis[prev])
     parse = self.current_analysis[prev]["spacy"]
     flag=self.precondition(qb_id,prev,lexical_answer_type,question_determiner)
     if flag==True:
@@ -1385,7 +1334,6 @@ class split_conjunctions(ConditionalHeuristic):
       yield question
   def postcondition(self,question1,question_prev):
     check2=is_quote_ok(question1)
-    #check2=True
     if check2==False:
       return syntax_checker(question_prev)
     doc=nlp(question1)
