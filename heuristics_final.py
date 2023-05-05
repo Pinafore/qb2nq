@@ -16,7 +16,7 @@ from nltk import Tree
 
 import spacy
 
-from nq_condition2 import *
+from nq_condition3 import *
 
 nlp = spacy.load('en_core_web_sm')
 
