@@ -62,7 +62,7 @@ instance, if you look at this feature set:
 This suggests that our nq-like questions start with "the" too often
 and have "of this".
 
-
+The orriginal QANTA can be found at https://sites.google.com/view/qanta/resources?authuser=0
 The data can be found here. https://drive.google.com/drive/u/1/folders/1mebfGC5AakYHdmRLUf718oAsfEU8tcYM
 ## Project Team Members:
 
