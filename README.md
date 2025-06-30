@@ -47,7 +47,12 @@ python3 transform_question.py --limit=100
 Example: Original QB Question (Elicitation)
 ```
 Original QB elicitation: 
-This river forms the Bujagali and Murchison Falls in its "Victoria" incarnation, and it also contains a segment named after Lake Albert. One of its deltas forms the Sudd wetland region, and the Jonglei canal was proposed to reroute part of it around the Sudd. Its headstreams include the Luvironza, and the Owen Falls Dam used it for hydroelectric power until 2006. Called the Bahr al Jabal upon entering Sudan and joining the Bahr el Ghazal at Lake No, it originates near Jinja in Lake Victoria. For 10 points, name this river that ends in Khartoum and unites with its blue counterpart as part of the longest river in the world. 
+This river forms the Bujagali and Murchison Falls in its "Victoria" incarnation, and it also contains a segment named after Lake Albert.
+One of its deltas forms the Sudd wetland region, and the Jonglei canal was proposed to reroute part of it around the Sudd.
+Its headstreams include the Luvironza, and the Owen Falls Dam used it for hydroelectric power until 2006.
+Called the Bahr al Jabal upon entering Sudan and joining the Bahr el Ghazal at Lake No, it originates near Jinja in Lake Victoria.
+For 10 points, name this river that ends in Khartoum and unites with its blue counterpart as part of the longest river in the world.
+
 Answer: White Nile
 ```
 Heuristic 1: Split via Conjunctions
