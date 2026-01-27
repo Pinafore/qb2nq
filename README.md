@@ -27,7 +27,7 @@ The first step is to examine how different answers are referred to in
 the dataset.
 
 ```
-python3 intermediate_results/lat_frequency.json
+make intermediate_results/lat_frequency.json
 ```
 
 Next, we transform question from the QB format to look like the NQ
