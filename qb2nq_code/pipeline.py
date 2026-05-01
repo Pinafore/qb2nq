@@ -20,6 +20,7 @@ Usage (JSON file):
 import re
 import json
 import csv
+import argparse
 
 from utils.text_utils import clean_text, split_into_sentences, remove_ftp_artifacts
 from utils.nlp_utils import extract_canonical_mention_from_text
@@ -237,12 +238,20 @@ def process_json_file(filepath, output_filepath, csv_filepath):
 # ============================================================
 
 if __name__ == "__main__":
-    for i in range(111, 114):
-        print(f"\nProcessing file {i}/110...")
-        process_json_file(
-            f"/fs/clip-quiz/tasnim/qb2nq_folder/backup/data_splits/split_qanta_temp{i}.json",
-            f"json/qb_output{i}.json",
-            f"csvs/qb_final_sentences{i}.csv"
-        )
-        print(f"File {i} done.")
-    print("\nAll files processed.")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", required=True, help="Input JSON file")
+    parser.add_argument("--output_dir", required=True, help="Output directory")
+    parser.add_argument("--output_file", required=True, help="Output file prefix (no extension)")
+
+    args = parser.parse_args()
+
+    output_json = f"{args.output_dir}/{args.output_file}.json"
+    output_csv = f"{args.output_dir}/{args.output_file}.csv"
+
+    process_json_file(
+        args.input,
+        output_json,
+        output_csv
+    )
+
+    print("Processing complete.")
