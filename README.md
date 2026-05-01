@@ -24,7 +24,10 @@ make clean
 ```
 To run the whole transformation
 ```
-python3 qb2nq_code/pipeline.py 
+python3 qb2nq_code/pipeline.py \
+  --input /path/to/input.json \
+  --output_dir /path/to/output \
+  --output_file qb_final_sentences
 ```
 The first step is to examine how different answers are referred to in
 the dataset.
