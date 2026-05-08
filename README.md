@@ -99,7 +99,15 @@ and have "of this".
 
 The orriginal QANTA can be found at https://sites.google.com/view/qanta/resources?authuser=0
 The data can be found here. https://drive.google.com/drive/u/1/folders/1mebfGC5AakYHdmRLUf718oAsfEU8tcYM
+
+## Resources
+
+Web demo: https://qb2nq.umiacs.umd.edu/
+
+Hugging Face dataset: https://huggingface.co/datasets/TasnimKabir12/QB2NQ
 ## Project Team Members:
+
+Tasnim Kabir
 
 Saptarashmi Bandyopadhyay
 
