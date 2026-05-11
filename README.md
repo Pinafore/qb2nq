@@ -105,18 +105,30 @@ The data can be found here. https://drive.google.com/drive/u/1/folders/1mebfGC5A
 Web demo: https://qb2nq.umiacs.umd.edu/
 
 Hugging Face dataset: https://huggingface.co/datasets/TasnimKabir12/QB2NQ
-## Project Team Members:
 
-Tasnim Kabir
+## Citation
 
-Saptarashmi Bandyopadhyay
+If you use this in your research, please cite:
 
-Hao Zou
-
-Chenqi Zhu
-
-Shraman Pal
-
-Abhranil Chandra
-
-Rohith Banda
+```bibtex
+@inproceedings{kabir-etal-2024-make,
+    title = "You Make me Feel like a Natural Question: Training {QA} Systems on Transformed Trivia Questions",
+    author = "Kabir, Tasnim  and
+      Sung, Yoo Yeon  and
+      Bandyopadhyay, Saptarashmi  and
+      Zou, Hao  and
+      Chandra, Abhranil  and
+      Boyd-Graber, Jordan Lee",
+    editor = "Al-Onaizan, Yaser  and
+      Bansal, Mohit  and
+      Chen, Yun-Nung",
+    booktitle = "Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing",
+    month = nov,
+    year = "2024",
+    address = "Miami, Florida, USA",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2024.emnlp-main.1140/",
+    doi = "10.18653/v1/2024.emnlp-main.1140",
+    pages = "20486--20510"
+}
+```
